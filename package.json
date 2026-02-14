@@ -1,11 +1,10 @@
 {
-  "name": "fake-news-detector",
-  "version": "1.0.0",
-  "description": "Chrome extension that analyzes webpage content for credibility using Claude API",
+  "name": "slopify",
+  "version": "2.0.0",
+  "description": "Chrome extension that fact-checks highlighted text using Claude API",
   "scripts": {
     "lint": "eslint .",
-    "format": "prettier --write .",
-    "serve": "npx http-server . -p 3000"
+    "format": "prettier --write ."
   },
   "devDependencies": {
     "eslint": "^8.57.0",
@@ -13,8 +12,7 @@
   },
   "keywords": [
     "chrome-extension",
-    "fake-news",
-    "credibility",
+    "fact-check",
     "claude-api"
   ],
   "license": "MIT"
