@@ -1,0 +1,10 @@
+{
+    "name": "Slopify",
+    "version": "1.0",
+    "description": "Detect AI Slop on any website",
+    "manifest_version": 3,
+    "action" : {
+        "default_popup": "popup.html",
+        "default_icon": "logo.png"
+    }
+}
