@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  dev:
+    build: .
+    volumes:
+      - .:/workspace
+      - /workspace/node_modules
+    ports:
+      - "3000:3000"
+    stdin_open: true
+    tty: true
+    command: /bin/bash

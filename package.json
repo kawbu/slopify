@@ -1,0 +1,21 @@
+{
+  "name": "fake-news-detector",
+  "version": "1.0.0",
+  "description": "Chrome extension that analyzes webpage content for credibility using Claude API",
+  "scripts": {
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "serve": "npx http-server . -p 3000"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.5"
+  },
+  "keywords": [
+    "chrome-extension",
+    "fake-news",
+    "credibility",
+    "claude-api"
+  ],
+  "license": "MIT"
+}
