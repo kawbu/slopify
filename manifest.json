@@ -4,7 +4,7 @@
     "description": "Detect AI Slop on any website",
     "manifest_version": 3,
     "action" : {
-        "default_popup": "popup.html",
-        "default_icon": "logo.png"
+        "default_popup": "frontend/popup.html",
+        "default_icon": "public/logo.png"
     }
 }
