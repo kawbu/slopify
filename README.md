@@ -40,7 +40,6 @@ The system consists of:
 
 - ❌ Incorporate AWS (For AWS Route)  
 - ❌ Incorporate Database & Valkey API to Cache previously scanned websites
-- ❌ Incorporate DB Valkey / Redis API usage  (For Valkey API)
 
 The application focuses strictly on **webpage-level analysis**.
 
