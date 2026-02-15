@@ -1,14 +1,4 @@
-const DEFAULT_BACKEND_URL = "https://q1zezp536f.execute-api.us-east-1.amazonaws.com";
-const MAX_SNIPPET_CHARS = 1800;
 const REUSE_RESULT_WINDOW_MS = 120000;
-
-function normalizeSnippet(text) {
-    const cleaned = String(text || "").replace(/\s+/g, " ").trim();
-    if (cleaned.length <= MAX_SNIPPET_CHARS) {
-        return cleaned;
-    }
-    return cleaned.slice(0, MAX_SNIPPET_CHARS);
-}
 
 function parseConfidence(confidence) {
     const n = Number(confidence);
@@ -87,51 +77,9 @@ function normalizeResult(payload) {
     return payload?.result || payload || {};
 }
 
-async function getBackendUrl() {
-    const { backendUrl } = await chrome.storage.local.get("backendUrl");
-    return backendUrl || DEFAULT_BACKEND_URL;
-}
-
-async function analyzeSnippet(snippet, pageUrl) {
-    const normalized = normalizeSnippet(snippet);
-    if (!normalized) {
-        throw new Error("No text selected.");
-    }
-
-    const backendUrl = await getBackendUrl();
-    const response = await fetch(`${backendUrl}/verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            snippet: normalized,
-            source: "chrome-extension-popup",
-            url: pageUrl || null,
-            user_context: {
-                trigger: "popup",
-                browserLocale: chrome.i18n.getUILanguage()
-            }
-        })
-    });
-
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-        throw new Error(payload?.error || `Request failed: HTTP ${response.status}`);
-    }
-
-    return payload;
-}
-
 async function getActiveTab() {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     return tabs?.[0] || null;
-}
-
-async function getSelectedText(tabId) {
-    const [result] = await chrome.scripting.executeScript({
-        target: { tabId },
-        func: () => window.getSelection().toString()
-    });
-    return String(result?.result || "").trim();
 }
 
 function renderResult(payload, pageUrl) {
@@ -173,12 +121,23 @@ function renderResult(payload, pageUrl) {
 }
 
 async function renderFromStoredResult(domain) {
-    const { lastAnalysis, lastAnalysisError, lastPageUrl, lastAnalysisAt } = await chrome.storage.local.get([
+    const { isAnalyzing, lastAnalysis, lastAnalysisError, lastPageUrl, lastAnalysisAt } = await chrome.storage.local.get([
+        "isAnalyzing",
         "lastAnalysis",
         "lastAnalysisError",
         "lastPageUrl",
         "lastAnalysisAt"
     ]);
+
+    if (isAnalyzing) {
+        setStatus("Analyzing selected text...");
+        if (lastAnalysis) {
+            renderResult(lastAnalysis, lastPageUrl || domain);
+            setStatus("Analyzing selected text...");
+            return true;
+        }
+        return true;
+    }
 
     if (lastAnalysis) {
         if (Number(lastAnalysisAt) && Date.now() - Number(lastAnalysisAt) > REUSE_RESULT_WINDOW_MS) {
@@ -199,7 +158,7 @@ async function renderFromStoredResult(domain) {
 
 document.addEventListener("DOMContentLoaded", async () => {
     setRiskScore(0, "example.com");
-    setStatus("Fetching selected text...");
+    setStatus("Waiting for Check Slopify...");
 
     try {
         const tab = await getActiveTab();
@@ -210,44 +169,28 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const domain = extractDomain(tab.url || "");
         setRiskScore(0, domain);
-
-        let selection = "";
-        try {
-            selection = normalizeSnippet(await getSelectedText(tab.id));
-        } catch {
-            // restricted pages may block script injection
+        const hadStored = await renderFromStoredResult(tab.url || "");
+        if (!hadStored) {
+            setStatus("Highlight text, right-click, then press Check Slopify.");
         }
 
-        if (!selection) {
-            const hadStored = await renderFromStoredResult(tab.url || "");
-            if (!hadStored) {
-                setStatus("Highlight text on the page, then open popup or use right-click analyze.");
+        chrome.storage.onChanged.addListener(async (changes, areaName) => {
+            if (areaName !== "local") {
+                return;
             }
-            return;
-        }
 
-        const cached = await chrome.storage.local.get(["lastSelectionText", "lastAnalysis", "lastAnalysisAt", "lastPageUrl"]);
-        if (
-            cached?.lastAnalysis &&
-            cached?.lastSelectionText === selection &&
-            Number(cached?.lastAnalysisAt) &&
-            Date.now() - Number(cached.lastAnalysisAt) <= REUSE_RESULT_WINDOW_MS
-        ) {
-            renderResult(cached.lastAnalysis, cached.lastPageUrl || tab.url || "");
-            setStatus("Showing cached result for current selection.");
-            return;
-        }
+            if (
+                !changes.isAnalyzing &&
+                !changes.lastAnalysis &&
+                !changes.lastAnalysisError &&
+                !changes.lastPageUrl &&
+                !changes.lastAnalysisAt
+            ) {
+                return;
+            }
 
-        setStatus("Analyzing selected text...");
-        const payload = await analyzeSnippet(selection, tab.url || null);
-        await chrome.storage.local.set({
-            lastAnalysis: payload,
-            lastSelectionText: selection,
-            lastPageUrl: tab.url || null,
-            lastAnalysisError: null,
-            lastAnalysisAt: Date.now()
+            await renderFromStoredResult(tab.url || "");
         });
-        renderResult(payload, tab.url || "");
     } catch (error) {
         setStatus(`Error: ${error?.message || "Failed to analyze."}`);
     }

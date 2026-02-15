@@ -52,9 +52,35 @@ body {
 .settings-icon {
     width: 24px;
     height: 24px;
+    border: none;
+    background: transparent;
+    padding: 0;
     cursor: pointer;
-    color: #6b7280;
-    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.settings-icon-svg {
+    width: 24px;
+    height: 24px;
+    background-color: #6b7280;
+    -webkit-mask: url("../../public/settings.svg") no-repeat center / contain;
+    mask: url("../../public/settings.svg") no-repeat center / contain;
+    transform-origin: center;
+    transition: transform 180ms ease, background-color 180ms ease;
+}
+
+.settings-icon:focus-visible {
+    outline: 2px solid #0066cc;
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+.settings-icon:hover .settings-icon-svg,
+.settings-icon:focus-visible .settings-icon-svg {
+    transform: rotate(25deg);
+    background-color: #0066cc;
 }
 
 .container {

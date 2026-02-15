@@ -109,10 +109,19 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     if (!selectedText) {
         await chrome.storage.local.set({
             lastAnalysisError: "No text selected. Highlight text first.",
+            isAnalyzing: false,
             lastAnalysisAt: Date.now()
         });
         return;
     }
+
+    await chrome.storage.local.set({
+        isAnalyzing: true,
+        lastAnalysisError: null,
+        lastSelectionText: selectedText,
+        lastPageUrl: tab?.url || null,
+        lastAnalysisAt: Date.now()
+    });
 
     try {
         const data = await analyzeSelection(selectedText, tab);
@@ -121,11 +130,13 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
             lastSelectionText: selectedText,
             lastPageUrl: tab?.url || null,
             lastAnalysisError: null,
+            isAnalyzing: false,
             lastAnalysisAt: Date.now()
         });
     } catch (error) {
         await chrome.storage.local.set({
             lastAnalysisError: error?.message || "Analysis failed",
+            isAnalyzing: false,
             lastAnalysisAt: Date.now()
         });
     }
