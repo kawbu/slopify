@@ -12,7 +12,7 @@
             <img src="../../public/Slopify.png" alt="Slopify" class="logo">
             <div class="logo-text-group">
                 <div class="logo-text">Slopify</div>
-                <div class="backend-label" id="backendLabel">Gemini</div>
+                <div class="backend-label" id="backendLabel">AWS Lambda</div>
             </div>
         </div>
         <button class="settings-icon" id="settingsButton" aria-label="Settings" title="Settings">
@@ -24,14 +24,14 @@
     <div class="settings-panel" id="settingsPanel" style="display:none;">
         <div class="settings-title">Backend Provider</div>
         <label class="backend-option" id="optionGemini">
-            <input type="radio" name="backendType" value="gemini" checked>
+            <input type="radio" name="backendType" value="gemini">
             <div class="backend-option-content">
                 <div class="backend-option-name">Gemini (Local)</div>
                 <div class="backend-option-desc">FastAPI + Google Gemini. Requires local server.</div>
             </div>
         </label>
         <label class="backend-option" id="optionLambda">
-            <input type="radio" name="backendType" value="lambda">
+            <input type="radio" name="backendType" value="lambda" checked>
             <div class="backend-option-content">
                 <div class="backend-option-name">AWS Lambda (Cloud)</div>
                 <div class="backend-option-desc">AWS Lambda + Bedrock. No local server needed.</div>
@@ -94,6 +94,8 @@
         <div class="section-title">Red Flags</div>
         <div id="flagsList"></div>
     </div>
+
+    <div class="aws-debug" id="awsDebug" style="display:none;"></div>
 
     <script src="popup.js"></script>
 </body>

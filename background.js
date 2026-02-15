@@ -19,11 +19,19 @@ function buildVerifyUrls(baseUrl, type) {
     const urls = [];
     if (base.endsWith("/verify")) {
       urls.push(base);
+      const withoutVerify = base.replace(/\/verify$/i, "");
+      if (withoutVerify) {
+        if (!/\/prod$/i.test(withoutVerify)) {
+          urls.push(`${withoutVerify}/prod/verify`);
+        }
+        urls.push(withoutVerify);
+      }
     } else {
       urls.push(`${base}/verify`);
       if (!/\/prod$/i.test(base)) {
         urls.push(`${base}/prod/verify`);
       }
+      urls.push(base);
     }
     return Array.from(new Set(urls));
   }
@@ -41,7 +49,7 @@ async function getBackendConfig() {
   ]);
 
   const provider = values.backendProvider === "aws" ? "lambda" : values.backendProvider;
-  const type = values.backendType || provider || "gemini";
+  const type = values.backendType || provider || "lambda";
   const geminiUrl = normalizeUrl(values.geminiBackendUrl, DEFAULT_GEMINI_URL);
   const lambdaUrl = normalizeUrl(values.awsBackendUrl || values.backendUrl, DEFAULT_LAMBDA_URL);
 
@@ -169,6 +177,8 @@ async function factCheckWithBackend(text, url) {
   let response = null;
   let data = null;
   let lastError = null;
+  let lastErrorStatus = null;
+  const attemptLogs = [];
 
   for (const target of candidateUrls) {
     if (!target) continue;
@@ -188,9 +198,29 @@ async function factCheckWithBackend(text, url) {
           return {};
         }
       })();
+
+      if (config.type === "lambda") {
+        attemptLogs.push({
+          url: target,
+          status: res.status,
+          ok: res.ok,
+          bodyPreview: String(rawText || "").slice(0, 800),
+          at: Date.now(),
+        });
+      }
+
       if (!res.ok) {
         const detail = parsed?.detail || parsed?.error || parsed?.message || rawText;
-        lastError = new Error(detail || `Backend error (${res.status})`);
+        const nextMessage = detail || `Backend error (${res.status})`;
+        const nextStatus = Number(res.status);
+        const prevIsNotFound = Number(lastErrorStatus) === 404;
+        const nextIsNotFound = nextStatus === 404;
+
+        // Keep the most informative error: prefer non-404 over 404.
+        if (!lastError || (prevIsNotFound && !nextIsNotFound) || (!prevIsNotFound && !nextIsNotFound)) {
+          lastError = new Error(nextMessage);
+          lastErrorStatus = nextStatus;
+        }
         continue;
       }
 
@@ -202,14 +232,45 @@ async function factCheckWithBackend(text, url) {
         if (healthyBase && healthyBase !== config.url) {
           await chrome.storage.local.set({ geminiBackendUrl: healthyBase });
         }
+      } else {
+        await chrome.storage.local.set({
+          lastAwsRequestDebug: {
+            status: "ok",
+            requestUrl: target,
+            attempts: attemptLogs,
+            responsePreview: JSON.stringify(parsed).slice(0, 1200),
+            at: Date.now(),
+          },
+        });
       }
       break;
     } catch (error) {
       lastError = error;
+      lastErrorStatus = null;
+      if (config.type === "lambda") {
+        attemptLogs.push({
+          url: target,
+          status: null,
+          ok: false,
+          error: error?.message || "Request failed",
+          at: Date.now(),
+        });
+      }
     }
   }
 
   if (!response) {
+    if (config.type === "lambda") {
+      await chrome.storage.local.set({
+        lastAwsRequestDebug: {
+          status: "error",
+          requestUrl: null,
+          attempts: attemptLogs,
+          error: lastError?.message || "Failed to contact backend.",
+          at: Date.now(),
+        },
+      });
+    }
     throw new Error(lastError?.message || "Failed to contact backend.");
   }
 
@@ -235,17 +296,31 @@ function normalizeLambdaResponse(result) {
     ? Math.round((confidenceRaw <= 1 ? confidenceRaw * 100 : confidenceRaw))
     : 50;
 
+  const scoreRaw = Number(result.score ?? result.raw_score);
+  const score = Number.isFinite(scoreRaw)
+    ? Math.max(0, Math.min(100, Math.round(scoreRaw)))
+    : null;
+
   return {
     verdict: labelToVerdict[result.label] || "Unverifiable",
+    label: result.label || "Unclear",
     confidence,
+    score,
+    raw_score: score,
     claims: Array.isArray(result.claims)
       ? result.claims.map((c) => ({
           claim: typeof c === "string" ? c : c.claim || "",
-          assessment: labelToVerdict[result.label] || "Unverifiable",
-          explanation: result.reasoning || "",
+          assessment: typeof c === "string"
+            ? (labelToVerdict[result.label] || "Unverifiable")
+            : (c.assessment || labelToVerdict[result.label] || "Unverifiable"),
+          explanation: typeof c === "string"
+            ? (result.reasoning || result.explanation || "")
+            : (c.explanation || result.reasoning || result.explanation || ""),
         }))
       : [],
     red_flags: [],
-    summary: result.reasoning || "No summary available.",
+    summary: result.summary || result.reasoning || result.explanation || "No summary available.",
+    reasoning: result.reasoning || result.explanation || "",
+    citations: Array.isArray(result.citations) ? result.citations : [],
   };
 }

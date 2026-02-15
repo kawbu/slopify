@@ -9,9 +9,25 @@ var VERDICT_RISK = {
 };
 
 function computeRiskScore(data) {
+  var directScore = Number(data && (data.score ?? data.raw_score));
+  if (Number.isFinite(directScore)) {
+    if (directScore < 0) return 0;
+    if (directScore > 100) return 100;
+    return Math.round(directScore);
+  }
+
   var base = VERDICT_RISK[data.verdict];
   if (base === undefined) base = 50;
-  return Math.round(base * (data.confidence / 100));
+
+  var confidenceRaw = Number(data && data.confidence);
+  var confidencePercent = Number.isFinite(confidenceRaw)
+    ? (confidenceRaw <= 1 ? confidenceRaw * 100 : confidenceRaw)
+    : 50;
+
+  if (confidencePercent < 0) confidencePercent = 0;
+  if (confidencePercent > 100) confidencePercent = 100;
+
+  return Math.round(base * (confidencePercent / 100));
 }
 
 function getRiskColor(score) {
@@ -92,8 +108,9 @@ function showResult(data, domain) {
 
   // Summary
   var summaryEl = document.getElementById('summarySection');
-  if (data.summary) {
-    summaryEl.textContent = data.summary;
+  var summaryText = data.summary || data.reasoning || data.explanation || '';
+  if (summaryText) {
+    summaryEl.textContent = summaryText;
     summaryEl.style.display = 'block';
   } else {
     summaryEl.style.display = 'none';
@@ -193,6 +210,39 @@ function setSettingsMessage(text) {
   if (el) el.textContent = text || '';
 }
 
+function renderAwsDebug(debug) {
+  var panel = document.getElementById('awsDebug');
+  if (!panel) return;
+  if (!debug) {
+    panel.style.display = 'none';
+    panel.textContent = '';
+    return;
+  }
+
+  var lines = [];
+  lines.push('AWS request debug');
+  lines.push('status: ' + (debug.status || 'unknown'));
+  if (debug.error) lines.push('error: ' + debug.error);
+  if (debug.requestUrl) lines.push('requestUrl: ' + debug.requestUrl);
+
+  var attempts = Array.isArray(debug.attempts) ? debug.attempts : [];
+  for (var i = 0; i < attempts.length; i++) {
+    var a = attempts[i] || {};
+    var prefix = 'attempt ' + (i + 1) + ': ' + (a.url || 'unknown-url');
+    var status = a.status == null ? 'no-status' : String(a.status);
+    lines.push(prefix + ' [' + status + ']');
+    if (a.error) lines.push('  error: ' + a.error);
+    if (a.bodyPreview) lines.push('  body: ' + String(a.bodyPreview).slice(0, 240));
+  }
+
+  if (debug.responsePreview) {
+    lines.push('response: ' + String(debug.responsePreview).slice(0, 240));
+  }
+
+  panel.textContent = lines.join('\n');
+  panel.style.display = 'block';
+}
+
 function applySettingsToUi(type, geminiUrl, lambdaUrl) {
   var radios = document.querySelectorAll('input[name="backendType"]');
   radios.forEach(function (r) { r.checked = r.value === type; });
@@ -213,7 +263,7 @@ function readSettingsFromStorage(callback) {
     'awsBackendUrl',
     'backendUrl'
   ], function (result) {
-    var type = result.backendType || (result.backendProvider === 'aws' ? 'lambda' : result.backendProvider) || 'gemini';
+      var type = result.backendType || (result.backendProvider === 'aws' ? 'lambda' : result.backendProvider) || 'lambda';
     var geminiUrl = normalizeUrl(result.geminiBackendUrl, DEFAULT_GEMINI_URL);
     var lambdaUrl = normalizeUrl(result.awsBackendUrl || result.backendUrl, DEFAULT_LAMBDA_URL);
     callback({ type: type, geminiUrl: geminiUrl, lambdaUrl: lambdaUrl });
@@ -240,13 +290,13 @@ function saveSettingsFromUi() {
 
 function resetSettings() {
   chrome.storage.local.set({
-    backendType: 'gemini',
-    backendProvider: 'gemini',
+     backendType: 'lambda',
+     backendProvider: 'aws',
     geminiBackendUrl: DEFAULT_GEMINI_URL,
     awsBackendUrl: DEFAULT_LAMBDA_URL,
     backendUrl: DEFAULT_LAMBDA_URL
   }, function () {
-    applySettingsToUi('gemini', DEFAULT_GEMINI_URL, DEFAULT_LAMBDA_URL);
+     applySettingsToUi('lambda', DEFAULT_GEMINI_URL, DEFAULT_LAMBDA_URL);
     setSettingsMessage('Defaults restored.');
   });
 }
@@ -257,10 +307,11 @@ document.addEventListener('DOMContentLoaded', function () {
   var saveBtn = document.getElementById('saveSettingsButton');
   var resetBtn = document.getElementById('resetSettingsButton');
 
-  chrome.storage.local.get(['slopifyState', 'lastResult'], function (result) {
+  chrome.storage.local.get(['slopifyState', 'lastResult', 'lastAwsRequestDebug'], function (result) {
     readSettingsFromStorage(function (settings) {
       applySettingsToUi(settings.type, settings.geminiUrl, settings.lambdaUrl);
     });
+    renderAwsDebug(result.lastAwsRequestDebug);
 
     var state = result.slopifyState;
     if (state) {
@@ -324,5 +375,8 @@ chrome.storage.onChanged.addListener(function (changes, area) {
     updateBackendLabel(changes.backendType.newValue);
   } else if (changes.backendProvider) {
     updateBackendLabel(changes.backendProvider.newValue === 'aws' ? 'lambda' : changes.backendProvider.newValue);
+  }
+  if (changes.lastAwsRequestDebug) {
+    renderAwsDebug(changes.lastAwsRequestDebug.newValue);
   }
 });
