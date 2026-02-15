@@ -31,6 +31,21 @@ function setRiskScore(score, domain = 'example.com') {
     }
 }
 
+// Function to update all indicators
+function updateIndicators(data) {
+    // Update phishing indicator
+    const phishingScore = data.phishing || 0;
+    document.getElementById('phishingScore').textContent = phishingScore + '%';
+
+    // Update AI generated content indicator
+    const aiScore = data.aiGenerated || 0;
+    document.getElementById('aiScore').textContent = aiScore + '%';
+
+    // Update deepfake indicator
+    const deepfakeScore = data.deepfake || 0;
+    document.getElementById('deepfakeScore').textContent = deepfakeScore + '%';
+}
+
 // Initialize with score 73
 document.addEventListener('DOMContentLoaded', function() {
     setRiskScore(73, 'example.com');
