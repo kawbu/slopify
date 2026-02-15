@@ -1,58 +1,43 @@
 import json
+import re
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from ..config import settings
 from ..models.schemas import VerifyResponse
 
-SYSTEM_PROMPT = """You are a fact-checking assistant. Analyze the provided text passage for factual accuracy.
+SYSTEM_PROMPT = """Fact-check the given text.
+Return ONLY a JSON object — no markdown, no extra text.
 
-Return your analysis as a JSON object with this exact structure:
-{
-  "verdict": "Accurate" or "Mostly Accurate" or "Mixed" or "Mostly Inaccurate" or "Inaccurate" or "Unverifiable",
-  "confidence": 0-100,
-  "claims": [
-    {
-      "claim": "The specific claim extracted from the text",
-      "assessment": "Accurate" or "Inaccurate" or "Misleading" or "Unverifiable" or "Lacks Context",
-      "explanation": "Brief explanation of why this claim is rated this way. If the claim is wrong, provide the correct information."
-    }
-  ],
-  "red_flags": ["Any concerning patterns: emotional manipulation, logical fallacies, missing context, etc."],
-  "summary": "A 2-3 sentence overall assessment of the passage's factual reliability. Provide additional context when the text is incomplete or misleading."
-}
+Schema:
+{"verdict":"Accurate|Mostly Accurate|Mixed|Mostly Inaccurate|Inaccurate|Unverifiable","confidence":0-100,"claims":[{"claim":"...","assessment":"Accurate|Inaccurate|Misleading|Unverifiable|Lacks Context","explanation":"One sentence. Correct the claim if wrong."}],"red_flags":["..."],"summary":"1-2 sentences."}
 
-Guidelines:
-- Extract and evaluate each distinct factual claim in the passage.
-- For well-known facts, state whether they are accurate.
-- For claims you cannot verify, mark them as "Unverifiable" rather than guessing.
-- Be specific in explanations. Reference what you know to be true when correcting claims.
-- If the text is opinion rather than factual claims, note this in the summary.
-- Do not add any text outside the JSON object. Return only valid JSON."""
+Rules: Mark unverifiable claims as "Unverifiable". Keep explanations to one sentence. Note opinions in summary."""
 
 
-def _get_model():
-    genai.configure(api_key=settings.gemini_api_key)
-    return genai.GenerativeModel(
-        model_name=settings.gemini_model,
-        system_instruction=SYSTEM_PROMPT,
-    )
+def _get_client():
+    return genai.Client(api_key=settings.gemini_api_key)
 
 
 async def analyze_text(text: str, url: str | None = None) -> VerifyResponse:
-    model = _get_model()
+    client = _get_client()
 
     user_message = f'Fact-check the following passage:\n\n"{text}"'
     if url:
         user_message += f"\n\n[Source URL: {url}]"
 
-    response = await model.generate_content_async(
-        user_message,
+    response = await client.aio.models.generate_content(
+        model=settings.gemini_model,
+        contents=user_message,
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            temperature=0.0,
+        ),
     )
 
     raw = response.text.strip()
     # Strip markdown code fences if present (```json ... ``` or ``` ... ```)
-    import re
     match = re.match(r"^```(?:json)?\s*\n(.*?)```\s*$", raw, re.DOTALL)
     if match:
         raw = match.group(1).strip()
