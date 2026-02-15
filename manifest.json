@@ -3,7 +3,7 @@
     "version": "1.0",
     "description": "Highlight text and check if it is slop",
     "manifest_version": 3,
-    "permissions": ["activeTab", "scripting", "contextMenus"],
+    "permissions": ["activeTab", "scripting", "contextMenus", "storage"],
     "host_permissions": ["https://*/*"],
     "background": {
         "service_worker": "background.js"

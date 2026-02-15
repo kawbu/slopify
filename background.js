@@ -1,123 +1,123 @@
-const MENU_ID = "check-if-slopped";
-const VERIFY_API_URL = "https://q1zezp536f.execute-api.us-east-1.amazonaws.com/verify";
+// background.js — Service worker: context menu, backend API, overlay injection
 
-function buildResultMessage(result, selectedText) {
-  if (!result) {
-    return `No response returned.\n\nSelected:\n${selectedText}`;
-  }
+const DEFAULT_BACKEND_URL = "https://q1zezp536f.execute-api.us-east-1.amazonaws.com";
+const MAX_SELECTION_LENGTH = 5000;
 
-  const score = result.score ?? "n/a";
-  const label = result.label || "Unknown";
-  const confidence =
-    typeof result.confidence === "number"
-      ? `${Math.round(result.confidence * 100)}%`
-      : result.confidence ?? "n/a";
-  const reason = result.reasoning || "No reasoning provided.";
-  const claims = Array.isArray(result.claims) ? result.claims : [];
-  const citations = Array.isArray(result.citations) ? result.citations : [];
-  const durationMs = result?.diagnostics?.totalDurationMs;
-
-  const claimsText = claims.length
-    ? claims.map((claim, i) => `${i + 1}. ${claim}`).join("\n")
-    : "None";
-
-  const citationsText = citations.length
-    ? citations
-        .slice(0, 3)
-        .map((citation, i) => {
-          const quote = citation?.quote ? String(citation.quote).slice(0, 160) : "(no quote)";
-          return `${i + 1}. ${citation?.url || "(no url)"}\n   Quote: ${quote}`;
-        })
-        .join("\n")
-    : "None";
-
-  const diagnosticsText = durationMs ? `\nDuration: ${durationMs} ms` : "";
-
-  return `Check if Slopped\n\nScore: ${score}\nLabel: ${label}\nConfidence: ${confidence}${diagnosticsText}\n\nReason:\n${reason}\n\nClaims:\n${claimsText}\n\nCitations:\n${citationsText}`;
+async function getBackendUrl() {
+  const { backendUrl } = await chrome.storage.local.get("backendUrl");
+  return backendUrl || DEFAULT_BACKEND_URL;
 }
 
-async function verifySnippet(selectedText, tab) {
-  if (VERIFY_API_URL.includes("YOUR_API_ID") || VERIFY_API_URL.includes("YOUR_REGION")) {
-    throw new Error("Set VERIFY_API_URL in background.js to your API Gateway /verify endpoint.");
-  }
-
-  const response = await fetch(VERIFY_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      snippet: selectedText,
-      source: "chrome-extension",
-      url: tab?.url || null,
-      user_context: {
-        pageTitle: tab?.title || null,
-        browserLocale: chrome.i18n.getUILanguage(),
-        requestedAt: new Date().toISOString()
-      }
-    })
-  });
-
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload?.error || `Verify request failed: HTTP ${response.status}`);
-  }
-
-  return payload;
-}
-
+// Register context menu on install
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
-    id: MENU_ID,
-    title: "Check if Slopped",
+    id: "slopify-factcheck",
+    title: "Fact-check with Slopify",
     contexts: ["selection"]
   });
 });
 
-chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId !== MENU_ID) {
+// Handle context menu clicks
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId !== "slopify-factcheck") return;
+  if (!tab || !tab.id) return;
+
+  if (
+    tab.url &&
+    (tab.url.startsWith("chrome://") || tab.url.startsWith("chrome-extension://"))
+  ) {
     return;
   }
 
-  const selectedText = (info.selectionText || "").trim();
+  // Get selected text — use info.selectionText, fall back to injecting a script
+  // for cases where Chrome truncates long selections
+  let selectedText = info.selectionText || "";
 
-  if (!tab?.id) {
-    console.log("[Slopify] No active tab to display selection.");
-    return;
+  if (!selectedText.trim()) {
+    try {
+      const [result] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => window.getSelection().toString()
+      });
+      selectedText = result?.result || "";
+    } catch (e) {
+      console.error("[Slopify] Could not get selection:", e);
+      return;
+    }
   }
 
-  if (!selectedText) {
-    chrome.scripting.executeScript({
+  if (!selectedText.trim()) return;
+
+  // Truncate if too long
+  if (selectedText.length > MAX_SELECTION_LENGTH) {
+    selectedText = selectedText.substring(0, MAX_SELECTION_LENGTH);
+  }
+
+  try {
+    // Inject overlay content script
+    await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      args: ["Please highlight text first."],
-      func: (message) => {
-        alert(message);
-      }
+      files: ["content/overlay.js"]
     });
-    return;
+
+    // Send loading state
+    await chrome.tabs.sendMessage(tab.id, {
+      action: "slopify-loading",
+      text: selectedText
+    });
+
+    // Call backend API
+    const result = await factCheckWithBackend(selectedText, tab.url);
+
+    // Send results to overlay
+    await chrome.tabs.sendMessage(tab.id, {
+      action: "slopify-result",
+      data: result,
+      originalText: selectedText
+    });
+  } catch (err) {
+    console.error("[Slopify] Error:", err);
+    try {
+      await chrome.tabs.sendMessage(tab.id, {
+        action: "slopify-error",
+        message: err.message
+      });
+    } catch (e) {
+      // Content script may not be ready
+      console.error("[Slopify] Could not send error to tab:", e);
+    }
+  }
+});
+
+async function factCheckWithBackend(text, url) {
+  const backendUrl = await getBackendUrl();
+  let response;
+  try {
+    response = await fetch(`${backendUrl}/verify`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        snippet: text,
+        text,
+        url,
+        source: "chrome-extension"
+      })
+    });
+  } catch (error) {
+    throw new Error(
+      `Failed to fetch backend at ${backendUrl}/verify. Check API Gateway URL, deployment, and CORS.`
+    );
   }
 
-  verifySnippet(selectedText, tab)
-    .then((verifyResponse) => {
-      const result = verifyResponse?.result || verifyResponse;
-      const message = buildResultMessage(result, selectedText);
+  if (!response.ok) {
+    const errorBody = await response.text();
+    if (response.status === 502) {
+      throw new Error("Backend could not parse AI response. Please try again.");
+    }
+    throw new Error(`Backend error (${response.status}): ${errorBody}`);
+  }
 
-      chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        args: [message],
-        func: (outputMessage) => {
-          alert(outputMessage);
-        }
-      });
-    })
-    .catch((error) => {
-      const msg = `Verification failed: ${error.message}`;
-      chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        args: [msg],
-        func: (outputMessage) => {
-          alert(outputMessage);
-        }
-      });
-    });
-});
+  return response.json();
+}

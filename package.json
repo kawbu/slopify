@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Chrome extension that analyzes webpage content for credibility using Claude API",
   "scripts": {
+    "test": "node --test",
     "lint": "eslint .",
     "format": "prettier --write .",
     "serve": "npx http-server . -p 3000"
