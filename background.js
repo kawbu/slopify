@@ -1,11 +1,13 @@
 // background.js — Service worker: context menu, backend API, storage
 
-const DEFAULT_BACKEND_URL = "http://localhost:8000";
+const DEFAULT_GEMINI_URL = "http://localhost:8000";
+const DEFAULT_LAMBDA_URL = "https://q1zezp536f.execute-api.us-east-1.amazonaws.com";
 const MAX_SELECTION_LENGTH = 5000;
 
-async function getBackendUrl() {
-  const { backendUrl } = await chrome.storage.local.get("backendUrl");
-  return backendUrl || DEFAULT_BACKEND_URL;
+async function getBackendConfig() {
+  const { backendType } = await chrome.storage.local.get(["backendType"]);
+  const type = backendType || "gemini";
+  return { type, url: type === "lambda" ? DEFAULT_LAMBDA_URL : DEFAULT_GEMINI_URL };
 }
 
 // Register context menu on install
@@ -29,8 +31,6 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     return;
   }
 
-  // Get selected text — use info.selectionText, fall back to injecting a script
-  // for cases where Chrome truncates long selections
   let selectedText = info.selectionText || "";
 
   if (!selectedText.trim()) {
@@ -48,7 +48,6 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
   if (!selectedText.trim()) return;
 
-  // Truncate if too long
   if (selectedText.length > MAX_SELECTION_LENGTH) {
     selectedText = selectedText.substring(0, MAX_SELECTION_LENGTH);
   }
@@ -56,7 +55,6 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const domain = tab.url ? new URL(tab.url).hostname : "unknown";
 
   try {
-    // Store loading state so the popup can show a spinner
     await chrome.storage.local.set({
       slopifyState: {
         status: "loading",
@@ -66,18 +64,14 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       },
     });
 
-    // Open the extension popup
     try {
       await chrome.action.openPopup();
     } catch (e) {
-      // openPopup may not be supported in all Chrome versions
       console.warn("[Slopify] Could not auto-open popup:", e);
     }
 
-    // Call backend API
     const result = await factCheckWithBackend(selectedText, tab.url);
 
-    // Store results so the popup can read them
     await chrome.storage.local.set({
       lastResult: {
         data: result,
@@ -106,14 +100,35 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 });
 
 async function factCheckWithBackend(text, url) {
-  const backendUrl = await getBackendUrl();
-  const response = await fetch(`${backendUrl}/verify`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ text, url }),
-  });
+  const config = await getBackendConfig();
+  let response;
+
+  if (config.type === "lambda") {
+    // AWS Lambda backend expects { snippet, source, url, user_context }
+    try {
+      response = await fetch(`${config.url}/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          snippet: text,
+          text,
+          url,
+          source: "chrome-extension",
+        }),
+      });
+    } catch (error) {
+      throw new Error(
+        `Failed to fetch Lambda backend at ${config.url}/verify. Check API Gateway URL, deployment, and CORS.`
+      );
+    }
+  } else {
+    // Gemini backend expects { text, url }
+    response = await fetch(`${config.url}/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, url }),
+    });
+  }
 
   if (!response.ok) {
     const errorBody = await response.text();
@@ -123,5 +138,41 @@ async function factCheckWithBackend(text, url) {
     throw new Error(`Backend error (${response.status}): ${errorBody}`);
   }
 
-  return response.json();
+  const data = await response.json();
+
+  // Lambda wraps response in { ok, result }, normalize it
+  if (config.type === "lambda" && data.result) {
+    return normalizeLambdaResponse(data.result);
+  }
+
+  return data;
+}
+
+// Convert Lambda response format to the standard Slopify format
+function normalizeLambdaResponse(result) {
+  const labelToVerdict = {
+    "Supported": "Accurate",
+    "Refuted": "Inaccurate",
+    "Misleading": "Mostly Inaccurate",
+    "Unclear": "Unverifiable",
+  };
+
+  const confidenceRaw = Number(result.confidence);
+  const confidence = Number.isFinite(confidenceRaw)
+    ? Math.round((confidenceRaw <= 1 ? confidenceRaw * 100 : confidenceRaw))
+    : 50;
+
+  return {
+    verdict: labelToVerdict[result.label] || "Unverifiable",
+    confidence,
+    claims: Array.isArray(result.claims)
+      ? result.claims.map((c) => ({
+          claim: typeof c === "string" ? c : c.claim || "",
+          assessment: labelToVerdict[result.label] || "Unverifiable",
+          explanation: result.reasoning || "",
+        }))
+      : [],
+    red_flags: [],
+    summary: result.reasoning || "No summary available.",
+  };
 }

@@ -9,12 +9,20 @@
         "contextMenus",
         "storage"
     ],
+    "host_permissions": [
+        "http://*/*",
+        "https://*/*"
+    ],
     "background": {
         "service_worker": "background.js"
     },
     "action": {
         "default_popup": "frontend/popup/popup.html",
         "default_icon": "public/Slopify.png"
+    },
+    "options_ui": {
+        "page": "frontend/options/options.html",
+        "open_in_tab": false
     },
     "icons": {
         "48": "public/Slopify.png",

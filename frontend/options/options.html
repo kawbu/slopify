@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slopify Settings</title>
+    <link rel="stylesheet" href="options.css">
+</head>
+<body>
+    <div class="header">
+        <img src="../../public/Slopify.png" alt="Slopify" class="logo">
+        <div class="header-text">
+            <div class="title">Slopify Settings</div>
+            <div class="subtitle">Choose your fact-checking backend</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="section-title">Backend Provider</div>
+
+        <label class="option" id="optionGemini">
+            <input type="radio" name="backendType" value="gemini" checked>
+            <div class="option-content">
+                <div class="option-name">Gemini (Local)</div>
+                <div class="option-desc">Uses the local FastAPI + Google Gemini backend. Requires the backend server running on your machine.</div>
+            </div>
+        </label>
+
+        <label class="option" id="optionLambda">
+            <input type="radio" name="backendType" value="lambda">
+            <div class="option-content">
+                <div class="option-name">AWS Lambda (Cloud)</div>
+                <div class="option-desc">Uses the cloud-hosted AWS Lambda + Bedrock backend. No local server needed.</div>
+            </div>
+        </label>
+    </div>
+
+<div class="actions">
+        <button id="saveBtn" class="btn-save">Save Settings</button>
+        <div class="save-status" id="saveStatus"></div>
+    </div>
+
+    <script src="options.js"></script>
+</body>
+</html>

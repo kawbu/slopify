@@ -87,8 +87,7 @@ function showResult(data, domain) {
   document.getElementById('loadingSection').style.display = 'none';
   document.getElementById('errorSection').style.display = 'none';
 
-  var confidence = data.confidence !== undefined ? data.confidence : 0;
-  var risk = 100 - confidence;
+  var risk = computeRiskScore(data);
   setRiskScore(risk, domain);
 
   // Summary
@@ -164,24 +163,43 @@ function renderState(state) {
   }
 }
 
+var BACKEND_LABELS = {
+  gemini: 'Gemini',
+  lambda: 'AWS Lambda'
+};
+
+function updateBackendLabel(type) {
+  document.getElementById('backendLabel').textContent = BACKEND_LABELS[type] || BACKEND_LABELS.gemini;
+}
+
 // On popup open: read current state
 document.addEventListener('DOMContentLoaded', function () {
-  chrome.storage.local.get(['slopifyState', 'lastResult'], function (result) {
+  chrome.storage.local.get(['slopifyState', 'lastResult', 'backendType'], function (result) {
+    updateBackendLabel(result.backendType);
+
     var state = result.slopifyState;
     if (state) {
       renderState(state);
     } else if (result.lastResult && result.lastResult.data) {
-      // Fallback to lastResult for backwards compat
       showResult(result.lastResult.data, result.lastResult.domain);
     } else {
       setRiskScore(0, 'No analysis yet');
     }
   });
+
+  // Settings button opens the options page
+  document.getElementById('settingsButton').addEventListener('click', function () {
+    chrome.runtime.openOptionsPage();
+  });
 });
 
 // Listen for storage changes so the popup updates live
 chrome.storage.onChanged.addListener(function (changes, area) {
-  if (area === 'local' && changes.slopifyState) {
+  if (area !== 'local') return;
+  if (changes.slopifyState) {
     renderState(changes.slopifyState.newValue);
+  }
+  if (changes.backendType) {
+    updateBackendLabel(changes.backendType.newValue);
   }
 });
