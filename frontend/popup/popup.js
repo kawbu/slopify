@@ -168,6 +168,15 @@ var BACKEND_LABELS = {
   lambda: 'AWS Lambda'
 };
 
+var DEFAULT_GEMINI_URL = 'http://localhost:8000';
+var DEFAULT_LAMBDA_URL = 'https://q1zezp536f.execute-api.us-east-1.amazonaws.com';
+
+function normalizeUrl(url, fallback) {
+  var value = (url || fallback || '').trim();
+  if (!value) return fallback || '';
+  return value.endsWith('/') ? value.slice(0, -1) : value;
+}
+
 function updateBackendLabel(type) {
   document.getElementById('backendLabel').textContent = BACKEND_LABELS[type] || BACKEND_LABELS.gemini;
 }
@@ -179,18 +188,79 @@ function updateSelectedStyles() {
   });
 }
 
+function setSettingsMessage(text) {
+  var el = document.getElementById('settingsMessage');
+  if (el) el.textContent = text || '';
+}
+
+function applySettingsToUi(type, geminiUrl, lambdaUrl) {
+  var radios = document.querySelectorAll('input[name="backendType"]');
+  radios.forEach(function (r) { r.checked = r.value === type; });
+  updateBackendLabel(type);
+  updateSelectedStyles();
+
+  var geminiEl = document.getElementById('geminiUrlInput');
+  var lambdaEl = document.getElementById('lambdaUrlInput');
+  if (geminiEl) geminiEl.value = geminiUrl;
+  if (lambdaEl) lambdaEl.value = lambdaUrl;
+}
+
+function readSettingsFromStorage(callback) {
+  chrome.storage.local.get([
+    'backendType',
+    'backendProvider',
+    'geminiBackendUrl',
+    'awsBackendUrl',
+    'backendUrl'
+  ], function (result) {
+    var type = result.backendType || (result.backendProvider === 'aws' ? 'lambda' : result.backendProvider) || 'gemini';
+    var geminiUrl = normalizeUrl(result.geminiBackendUrl, DEFAULT_GEMINI_URL);
+    var lambdaUrl = normalizeUrl(result.awsBackendUrl || result.backendUrl, DEFAULT_LAMBDA_URL);
+    callback({ type: type, geminiUrl: geminiUrl, lambdaUrl: lambdaUrl });
+  });
+}
+
+function saveSettingsFromUi() {
+  var selected = document.querySelector('input[name="backendType"]:checked');
+  var type = selected ? selected.value : 'gemini';
+  var geminiUrl = normalizeUrl(document.getElementById('geminiUrlInput').value, DEFAULT_GEMINI_URL);
+  var lambdaUrl = normalizeUrl(document.getElementById('lambdaUrlInput').value, DEFAULT_LAMBDA_URL);
+
+  chrome.storage.local.set({
+    backendType: type,
+    backendProvider: type === 'lambda' ? 'aws' : 'gemini',
+    geminiBackendUrl: geminiUrl,
+    awsBackendUrl: lambdaUrl,
+    backendUrl: lambdaUrl
+  }, function () {
+    applySettingsToUi(type, geminiUrl, lambdaUrl);
+    setSettingsMessage('Saved.');
+  });
+}
+
+function resetSettings() {
+  chrome.storage.local.set({
+    backendType: 'gemini',
+    backendProvider: 'gemini',
+    geminiBackendUrl: DEFAULT_GEMINI_URL,
+    awsBackendUrl: DEFAULT_LAMBDA_URL,
+    backendUrl: DEFAULT_LAMBDA_URL
+  }, function () {
+    applySettingsToUi('gemini', DEFAULT_GEMINI_URL, DEFAULT_LAMBDA_URL);
+    setSettingsMessage('Defaults restored.');
+  });
+}
+
 // On popup open: read current state
 document.addEventListener('DOMContentLoaded', function () {
   var settingsPanel = document.getElementById('settingsPanel');
+  var saveBtn = document.getElementById('saveSettingsButton');
+  var resetBtn = document.getElementById('resetSettingsButton');
 
-  chrome.storage.local.get(['slopifyState', 'lastResult', 'backendType'], function (result) {
-    var type = result.backendType || 'gemini';
-    updateBackendLabel(type);
-
-    // Set the correct radio button
-    var radios = document.querySelectorAll('input[name="backendType"]');
-    radios.forEach(function (r) { r.checked = r.value === type; });
-    updateSelectedStyles();
+  chrome.storage.local.get(['slopifyState', 'lastResult'], function (result) {
+    readSettingsFromStorage(function (settings) {
+      applySettingsToUi(settings.type, settings.geminiUrl, settings.lambdaUrl);
+    });
 
     var state = result.slopifyState;
     if (state) {
@@ -206,17 +276,42 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('settingsButton').addEventListener('click', function () {
     var visible = settingsPanel.style.display !== 'none';
     settingsPanel.style.display = visible ? 'none' : 'block';
+    if (!visible) {
+      readSettingsFromStorage(function (settings) {
+        applySettingsToUi(settings.type, settings.geminiUrl, settings.lambdaUrl);
+        setSettingsMessage('');
+      });
+    }
   });
 
-  // Save immediately when a radio is clicked
+  // Update preview selection only; save through Save button
   document.querySelectorAll('input[name="backendType"]').forEach(function (radio) {
     radio.addEventListener('change', function () {
-      var selected = this.value;
-      chrome.storage.local.set({ backendType: selected });
-      updateBackendLabel(selected);
+      updateBackendLabel(this.value);
       updateSelectedStyles();
+      setSettingsMessage('Unsaved changes');
     });
   });
+
+  if (saveBtn) {
+    saveBtn.addEventListener('click', saveSettingsFromUi);
+  }
+  if (resetBtn) {
+    resetBtn.addEventListener('click', resetSettings);
+  }
+
+  var geminiUrlInput = document.getElementById('geminiUrlInput');
+  var lambdaUrlInput = document.getElementById('lambdaUrlInput');
+  if (geminiUrlInput) {
+    geminiUrlInput.addEventListener('input', function () {
+      setSettingsMessage('Unsaved changes');
+    });
+  }
+  if (lambdaUrlInput) {
+    lambdaUrlInput.addEventListener('input', function () {
+      setSettingsMessage('Unsaved changes');
+    });
+  }
 });
 
 // Listen for storage changes so the popup updates live
@@ -227,5 +322,7 @@ chrome.storage.onChanged.addListener(function (changes, area) {
   }
   if (changes.backendType) {
     updateBackendLabel(changes.backendType.newValue);
+  } else if (changes.backendProvider) {
+    updateBackendLabel(changes.backendProvider.newValue === 'aws' ? 'lambda' : changes.backendProvider.newValue);
   }
 });

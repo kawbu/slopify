@@ -1,13 +1,56 @@
 // background.js — Service worker: context menu, backend API, storage
 
 const DEFAULT_GEMINI_URL = "http://localhost:8000";
+const ALT_GEMINI_URL = "http://localhost:8787";
 const DEFAULT_LAMBDA_URL = "https://q1zezp536f.execute-api.us-east-1.amazonaws.com";
 const MAX_SELECTION_LENGTH = 5000;
 
+function normalizeUrl(url, fallback) {
+  const value = String(url || fallback || "").trim();
+  if (!value) return String(fallback || "");
+  return value.endsWith("/") ? value.slice(0, -1) : value;
+}
+
+function buildVerifyUrls(baseUrl, type) {
+  const base = normalizeUrl(baseUrl, "");
+  if (!base) return [];
+
+  if (type === "lambda") {
+    const urls = [];
+    if (base.endsWith("/verify")) {
+      urls.push(base);
+    } else {
+      urls.push(`${base}/verify`);
+      if (!/\/prod$/i.test(base)) {
+        urls.push(`${base}/prod/verify`);
+      }
+    }
+    return Array.from(new Set(urls));
+  }
+
+  return [base.endsWith("/verify") ? base : `${base}/verify`];
+}
+
 async function getBackendConfig() {
-  const { backendType } = await chrome.storage.local.get(["backendType"]);
-  const type = backendType || "gemini";
-  return { type, url: type === "lambda" ? DEFAULT_LAMBDA_URL : DEFAULT_GEMINI_URL };
+  const values = await chrome.storage.local.get([
+    "backendType",
+    "backendProvider",
+    "geminiBackendUrl",
+    "awsBackendUrl",
+    "backendUrl",
+  ]);
+
+  const provider = values.backendProvider === "aws" ? "lambda" : values.backendProvider;
+  const type = values.backendType || provider || "gemini";
+  const geminiUrl = normalizeUrl(values.geminiBackendUrl, DEFAULT_GEMINI_URL);
+  const lambdaUrl = normalizeUrl(values.awsBackendUrl || values.backendUrl, DEFAULT_LAMBDA_URL);
+
+  return {
+    type,
+    url: type === "lambda" ? lambdaUrl : geminiUrl,
+    geminiUrl,
+    lambdaUrl,
+  };
 }
 
 // Register context menu on install
@@ -101,44 +144,74 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
 async function factCheckWithBackend(text, url) {
   const config = await getBackendConfig();
-  let response;
-
-  if (config.type === "lambda") {
-    // AWS Lambda backend expects { snippet, source, url, user_context }
-    try {
-      response = await fetch(`${config.url}/verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+  const body =
+    config.type === "lambda"
+      ? {
           snippet: text,
           text,
           url,
           source: "chrome-extension",
-        }),
+          user_context: {
+            trigger: "context-menu",
+            browserLocale: chrome.i18n.getUILanguage(),
+          },
+        }
+      : { text, url };
+
+  const candidateBases =
+    config.type === "gemini"
+      ? [config.url, config.url === DEFAULT_GEMINI_URL ? ALT_GEMINI_URL : DEFAULT_GEMINI_URL]
+      : [config.url];
+
+  const candidateUrls = candidateBases
+    .flatMap((base) => buildVerifyUrls(base, config.type));
+
+  let response = null;
+  let data = null;
+  let lastError = null;
+
+  for (const target of candidateUrls) {
+    if (!target) continue;
+
+    try {
+      const res = await fetch(target, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
+
+      const rawText = await res.text();
+      const parsed = (() => {
+        try {
+          return rawText ? JSON.parse(rawText) : {};
+        } catch {
+          return {};
+        }
+      })();
+      if (!res.ok) {
+        const detail = parsed?.detail || parsed?.error || parsed?.message || rawText;
+        lastError = new Error(detail || `Backend error (${res.status})`);
+        continue;
+      }
+
+      response = res;
+      data = parsed;
+
+      if (config.type === "gemini") {
+        const healthyBase = target.replace(/\/verify$/i, "");
+        if (healthyBase && healthyBase !== config.url) {
+          await chrome.storage.local.set({ geminiBackendUrl: healthyBase });
+        }
+      }
+      break;
     } catch (error) {
-      throw new Error(
-        `Failed to fetch Lambda backend at ${config.url}/verify. Check API Gateway URL, deployment, and CORS.`
-      );
+      lastError = error;
     }
-  } else {
-    // Gemini backend expects { text, url }
-    response = await fetch(`${config.url}/verify`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, url }),
-    });
   }
 
-  if (!response.ok) {
-    const errorBody = await response.text();
-    if (response.status === 502) {
-      throw new Error("Backend could not parse AI response. Please try again.");
-    }
-    throw new Error(`Backend error (${response.status}): ${errorBody}`);
+  if (!response) {
+    throw new Error(lastError?.message || "Failed to contact backend.");
   }
-
-  const data = await response.json();
 
   // Lambda wraps response in { ok, result }, normalize it
   if (config.type === "lambda" && data.result) {
