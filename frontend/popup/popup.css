@@ -124,6 +124,20 @@ body {
     margin-top: 15px;
 }
 
+.status,
+.verdict,
+.summary {
+    width: 100%;
+    text-align: left;
+    margin-top: 8px;
+    color: #334155;
+    font-size: 13px;
+}
+
+.summary {
+    color: #475569;
+}
+
 .indicators-container {
     display: flex;
     flex-direction: column;
@@ -157,6 +171,11 @@ body {
     font-size: 12px;
     color: #9ca3af;
     line-height: 1.4;
+}
+
+#redFlagsDescription,
+#claimsDescription {
+    white-space: pre-line;
 }
 
 .indicator-percentage {

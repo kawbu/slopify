@@ -27,31 +27,26 @@
             </div>
         </div>
         <div class="domain">example.com</div>
+        <div class="status" id="statusText">Select text on a page, then analyze.</div>
+        <div class="verdict" id="verdictText">Verdict: —</div>
+        <div class="summary" id="summaryText">Summary: —</div>
     </div>
 
     <div class="indicators-container">
         <div class="indicator-row">
             <div class="indicator-label">
-                <div class="indicator-title">Phishing Indicators</div>
-                <div class="indicator-description">Detects suspicious phishing attempts and fraudulent links</div>
+                <div class="indicator-title">Red Flags</div>
+                <div class="indicator-description" id="redFlagsDescription">No red flags returned.</div>
             </div>
-            <div class="indicator-percentage" id="phishingScore">0%</div>
+            <div class="indicator-percentage" id="redFlagsCount">0</div>
         </div>
 
         <div class="indicator-row">
             <div class="indicator-label">
-                <div class="indicator-title">AI Generated Content</div>
-                <div class="indicator-description">Identifies AI-generated text and synthetic content</div>
+                <div class="indicator-title">Claims</div>
+                <div class="indicator-description" id="claimsDescription">No claims returned.</div>
             </div>
-            <div class="indicator-percentage" id="aiScore">0%</div>
-        </div>
-
-        <div class="indicator-row">
-            <div class="indicator-label">
-                <div class="indicator-title">Deepfake Signals</div>
-                <div class="indicator-description">Detects deepfake media and manipulated content</div>
-            </div>
-            <div class="indicator-percentage" id="deepfakeScore">0%</div>
+            <div class="indicator-percentage" id="claimsCount">0</div>
         </div>
     </div>
 
