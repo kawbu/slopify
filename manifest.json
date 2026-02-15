@@ -1,10 +1,15 @@
 {
     "name": "Slopify",
     "version": "1.0",
-    "description": "Detect AI Slop on any website",
+    "description": "Highlight text and check if it is slop",
     "manifest_version": 3,
-    "action" : {
-        "default_popup": "frontend/popup.html",
+    "permissions": ["activeTab", "scripting", "contextMenus"],
+    "host_permissions": ["https://*/*"],
+    "background": {
+        "service_worker": "background.js"
+    },
+    "action": {
+        "default_title": "Slopify",
         "default_icon": "public/logo.png"
     }
 }
