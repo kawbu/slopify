@@ -1,11 +1,21 @@
 {
-    "name": "Slopify",
-    "version": "1.0",
-    "description": "Detect AI Slop on any website",
-    "manifest_version": 3,
-    "action" : {
-        "default_popup": "frontend/html/popup.html",
-        "default_icon": "public/Slopify.png"
-    },
-    "permissions": ["activeTab", "scripting"]
+  "name": "Slopify",
+  "version": "1.0",
+  "description": "Detect AI Slop on any website",
+  "manifest_version": 3,
+
+  "action": {
+    "default_popup": "frontend/popup/popup.html",
+    "default_icon": "public/Slopify.png"
+  },
+
+  "permissions": [
+    "contextMenus",
+    "activeTab",
+    "scripting"
+  ],
+
+  "background": {
+    "service_worker": "service-worker.js"
+  }
 }
