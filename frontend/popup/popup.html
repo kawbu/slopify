@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slopify - Risk Score</title>
+    <link rel="stylesheet" href="../popup/popup.css">
+</head>
+<body>
+    <div class="header">
+        <div class="logo-section">
+            <img src="../../public/Slopify.png" alt="Slopify" class="logo">
+            <div class="logo-text">Slopify</div>
+        </div>
+        <div class="settings-icon">⚙️</div>
+    </div>
+
+    <div class="container">
+        <div class="circle-container">
+            <svg class="progress-circle" viewBox="0 0 200 200">
+                <circle class="circle-background" cx="100" cy="100" r="90"></circle>
+                <circle class="circle-progress" id="progressCircle" cx="100" cy="100" r="90"></circle>
+            </svg>
+            <div class="circle-text">
+                <div class="score-number" id="scoreNumber">73</div>
+                <div class="score-label">Risk Score</div>
+            </div>
+        </div>
+        <div class="domain">example.com</div>
+    </div>
+
+    <div class="indicators-container">
+        <div class="indicator-row">
+            <div class="indicator-label">
+                <div class="indicator-title">Phishing Indicators</div>
+                <div class="indicator-description">Detects suspicious phishing attempts and fraudulent links</div>
+            </div>
+            <div class="indicator-percentage" id="phishingScore">0%</div>
+        </div>
+
+        <div class="indicator-row">
+            <div class="indicator-label">
+                <div class="indicator-title">AI Generated Content</div>
+                <div class="indicator-description">Identifies AI-generated text and synthetic content</div>
+            </div>
+            <div class="indicator-percentage" id="aiScore">0%</div>
+        </div>
+
+        <div class="indicator-row">
+            <div class="indicator-label">
+                <div class="indicator-title">Deepfake Signals</div>
+                <div class="indicator-description">Detects deepfake media and manipulated content</div>
+            </div>
+            <div class="indicator-percentage" id="deepfakeScore">0%</div>
+        </div>
+    </div>
+
+    <script src="../popup/popup.js"></script>
+</body>
+</html>
