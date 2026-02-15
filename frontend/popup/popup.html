@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slopify</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="header">
+        <div class="logo-section">
+            <img src="../../public/Slopify.png" alt="Slopify" class="logo">
+            <div class="logo-text-group">
+                <div class="logo-text">Slopify</div>
+                <div class="backend-label" id="backendLabel">AWS Lambda</div>
+            </div>
+        </div>
+        <button class="settings-icon" id="settingsButton" aria-label="Settings" title="Settings">
+            <span class="settings-icon-svg" id="settingsIcon"></span>
+        </button>
+    </div>
+
+    <!-- Settings panel (hidden by default) -->
+    <div class="settings-panel" id="settingsPanel" style="display:none;">
+        <div class="settings-title">Backend Provider</div>
+        <label class="backend-option" id="optionGemini">
+            <input type="radio" name="backendType" value="gemini">
+            <div class="backend-option-content">
+                <div class="backend-option-name">Gemini (Local)</div>
+                <div class="backend-option-desc">FastAPI + Google Gemini. Requires local server.</div>
+            </div>
+        </label>
+        <label class="backend-option" id="optionLambda">
+            <input type="radio" name="backendType" value="lambda" checked>
+            <div class="backend-option-content">
+                <div class="backend-option-name">AWS Lambda (Cloud)</div>
+                <div class="backend-option-desc">AWS Lambda + Bedrock. No local server needed.</div>
+            </div>
+        </label>
+
+        <div class="settings-subtitle">Backend URLs</div>
+        <label class="url-label" for="geminiUrlInput">Gemini URL</label>
+        <input id="geminiUrlInput" class="url-input" type="url" placeholder="http://localhost:8000">
+
+        <label class="url-label" for="lambdaUrlInput">AWS Lambda URL</label>
+        <input id="lambdaUrlInput" class="url-input" type="url" placeholder="https://...">
+
+        <div class="settings-actions">
+            <button id="saveSettingsButton" class="settings-btn primary">Save</button>
+            <button id="resetSettingsButton" class="settings-btn">Reset</button>
+        </div>
+        <div class="settings-message" id="settingsMessage"></div>
+    </div>
+
+    <!-- Score card section -->
+    <div class="container" id="scoreCard">
+        <div class="circle-container">
+            <svg class="progress-circle" viewBox="0 0 200 200">
+                <circle class="circle-background" cx="100" cy="100" r="90"></circle>
+                <circle class="circle-progress" id="progressCircle" cx="100" cy="100" r="90"></circle>
+            </svg>
+            <div class="circle-text">
+                <div class="score-number" id="scoreNumber">0</div>
+                <div class="score-label">Risk</div>
+            </div>
+        </div>
+        <div class="domain" id="domainText">No analysis yet</div>
+    </div>
+
+    <!-- Loading spinner (hidden by default) -->
+    <div class="loading-section" id="loadingSection" style="display:none;">
+        <div class="spinner"></div>
+        <div class="loading-text">Fact-checking...</div>
+        <div class="selected-preview" id="loadingPreview"></div>
+    </div>
+
+    <!-- Error section (hidden by default) -->
+    <div class="error-section" id="errorSection" style="display:none;">
+        <div class="error-icon">!</div>
+        <div class="error-message" id="errorMessage"></div>
+    </div>
+
+    <!-- Summary section (hidden by default) -->
+    <div class="summary" id="summarySection" style="display:none;"></div>
+
+    <!-- Claims section (hidden by default) -->
+    <div id="claimsSection" style="display:none;">
+        <div class="section-title">Claims Analysis</div>
+        <div id="claimsList"></div>
+    </div>
+
+    <!-- Red flags section (hidden by default) -->
+    <div id="flagsSection" style="display:none;">
+        <div class="section-title">Red Flags</div>
+        <div id="flagsList"></div>
+    </div>
+
+    <div class="aws-debug" id="awsDebug" style="display:none;"></div>
+
+    <script src="popup.js"></script>
+</body>
+</html>
