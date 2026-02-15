@@ -38,13 +38,6 @@
             </div>
         </label>
 
-        <div class="settings-subtitle">Backend URLs</div>
-        <label class="url-label" for="geminiUrlInput">Gemini URL</label>
-        <input id="geminiUrlInput" class="url-input" type="url" placeholder="http://localhost:8000">
-
-        <label class="url-label" for="lambdaUrlInput">AWS Lambda URL</label>
-        <input id="lambdaUrlInput" class="url-input" type="url" placeholder="https://...">
-
         <div class="settings-actions">
             <button id="saveSettingsButton" class="settings-btn primary">Save</button>
             <button id="resetSettingsButton" class="settings-btn">Reset</button>
@@ -94,8 +87,6 @@
         <div class="section-title">Red Flags</div>
         <div id="flagsList"></div>
     </div>
-
-    <div class="aws-debug" id="awsDebug" style="display:none;"></div>
 
     <script src="popup.js"></script>
 </body>

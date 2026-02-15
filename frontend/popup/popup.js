@@ -185,15 +185,6 @@ var BACKEND_LABELS = {
   lambda: 'AWS Lambda'
 };
 
-var DEFAULT_GEMINI_URL = 'http://localhost:8000';
-var DEFAULT_LAMBDA_URL = 'https://q1zezp536f.execute-api.us-east-1.amazonaws.com';
-
-function normalizeUrl(url, fallback) {
-  var value = (url || fallback || '').trim();
-  if (!value) return fallback || '';
-  return value.endsWith('/') ? value.slice(0, -1) : value;
-}
-
 function updateBackendLabel(type) {
   document.getElementById('backendLabel').textContent = BACKEND_LABELS[type] || BACKEND_LABELS.gemini;
 }
@@ -210,93 +201,45 @@ function setSettingsMessage(text) {
   if (el) el.textContent = text || '';
 }
 
-function renderAwsDebug(debug) {
-  var panel = document.getElementById('awsDebug');
-  if (!panel) return;
-  if (!debug) {
-    panel.style.display = 'none';
-    panel.textContent = '';
-    return;
-  }
-
-  var lines = [];
-  lines.push('AWS request debug');
-  lines.push('status: ' + (debug.status || 'unknown'));
-  if (debug.error) lines.push('error: ' + debug.error);
-  if (debug.requestUrl) lines.push('requestUrl: ' + debug.requestUrl);
-
-  var attempts = Array.isArray(debug.attempts) ? debug.attempts : [];
-  for (var i = 0; i < attempts.length; i++) {
-    var a = attempts[i] || {};
-    var prefix = 'attempt ' + (i + 1) + ': ' + (a.url || 'unknown-url');
-    var status = a.status == null ? 'no-status' : String(a.status);
-    lines.push(prefix + ' [' + status + ']');
-    if (a.error) lines.push('  error: ' + a.error);
-    if (a.bodyPreview) lines.push('  body: ' + String(a.bodyPreview).slice(0, 240));
-  }
-
-  if (debug.responsePreview) {
-    lines.push('response: ' + String(debug.responsePreview).slice(0, 240));
-  }
-
-  panel.textContent = lines.join('\n');
-  panel.style.display = 'block';
-}
-
-function applySettingsToUi(type, geminiUrl, lambdaUrl) {
+function applySettingsToUi(type) {
   var radios = document.querySelectorAll('input[name="backendType"]');
   radios.forEach(function (r) { r.checked = r.value === type; });
   updateBackendLabel(type);
   updateSelectedStyles();
-
-  var geminiEl = document.getElementById('geminiUrlInput');
-  var lambdaEl = document.getElementById('lambdaUrlInput');
-  if (geminiEl) geminiEl.value = geminiUrl;
-  if (lambdaEl) lambdaEl.value = lambdaUrl;
 }
 
 function readSettingsFromStorage(callback) {
   chrome.storage.local.get([
     'backendType',
-    'backendProvider',
-    'geminiBackendUrl',
-    'awsBackendUrl',
-    'backendUrl'
+    'backendProvider'
   ], function (result) {
-      var type = result.backendType || (result.backendProvider === 'aws' ? 'lambda' : result.backendProvider) || 'lambda';
-    var geminiUrl = normalizeUrl(result.geminiBackendUrl, DEFAULT_GEMINI_URL);
-    var lambdaUrl = normalizeUrl(result.awsBackendUrl || result.backendUrl, DEFAULT_LAMBDA_URL);
-    callback({ type: type, geminiUrl: geminiUrl, lambdaUrl: lambdaUrl });
+    var type = result.backendType || (result.backendProvider === 'aws' ? 'lambda' : result.backendProvider) || 'lambda';
+    callback({ type: type });
+  });
+}
+
+function persistBackendSelection(type, callback) {
+  chrome.storage.local.set({
+    backendType: type,
+    backendProvider: type === 'lambda' ? 'aws' : 'gemini'
+  }, function () {
+    if (callback) callback();
   });
 }
 
 function saveSettingsFromUi() {
   var selected = document.querySelector('input[name="backendType"]:checked');
   var type = selected ? selected.value : 'gemini';
-  var geminiUrl = normalizeUrl(document.getElementById('geminiUrlInput').value, DEFAULT_GEMINI_URL);
-  var lambdaUrl = normalizeUrl(document.getElementById('lambdaUrlInput').value, DEFAULT_LAMBDA_URL);
 
-  chrome.storage.local.set({
-    backendType: type,
-    backendProvider: type === 'lambda' ? 'aws' : 'gemini',
-    geminiBackendUrl: geminiUrl,
-    awsBackendUrl: lambdaUrl,
-    backendUrl: lambdaUrl
-  }, function () {
-    applySettingsToUi(type, geminiUrl, lambdaUrl);
+  persistBackendSelection(type, function () {
+    applySettingsToUi(type);
     setSettingsMessage('Saved.');
   });
 }
 
 function resetSettings() {
-  chrome.storage.local.set({
-     backendType: 'lambda',
-     backendProvider: 'aws',
-    geminiBackendUrl: DEFAULT_GEMINI_URL,
-    awsBackendUrl: DEFAULT_LAMBDA_URL,
-    backendUrl: DEFAULT_LAMBDA_URL
-  }, function () {
-     applySettingsToUi('lambda', DEFAULT_GEMINI_URL, DEFAULT_LAMBDA_URL);
+  persistBackendSelection('lambda', function () {
+    applySettingsToUi('lambda');
     setSettingsMessage('Defaults restored.');
   });
 }
@@ -307,11 +250,10 @@ document.addEventListener('DOMContentLoaded', function () {
   var saveBtn = document.getElementById('saveSettingsButton');
   var resetBtn = document.getElementById('resetSettingsButton');
 
-  chrome.storage.local.get(['slopifyState', 'lastResult', 'lastAwsRequestDebug'], function (result) {
+  chrome.storage.local.get(['slopifyState', 'lastResult'], function (result) {
     readSettingsFromStorage(function (settings) {
-      applySettingsToUi(settings.type, settings.geminiUrl, settings.lambdaUrl);
+      applySettingsToUi(settings.type);
     });
-    renderAwsDebug(result.lastAwsRequestDebug);
 
     var state = result.slopifyState;
     if (state) {
@@ -329,18 +271,21 @@ document.addEventListener('DOMContentLoaded', function () {
     settingsPanel.style.display = visible ? 'none' : 'block';
     if (!visible) {
       readSettingsFromStorage(function (settings) {
-        applySettingsToUi(settings.type, settings.geminiUrl, settings.lambdaUrl);
+        applySettingsToUi(settings.type);
         setSettingsMessage('');
       });
     }
   });
 
-  // Update preview selection only; save through Save button
+  // Persist backend switch immediately on selection change
   document.querySelectorAll('input[name="backendType"]').forEach(function (radio) {
     radio.addEventListener('change', function () {
-      updateBackendLabel(this.value);
-      updateSelectedStyles();
-      setSettingsMessage('Unsaved changes');
+      var selectedType = this.value;
+      persistBackendSelection(selectedType, function () {
+        updateBackendLabel(selectedType);
+        updateSelectedStyles();
+        setSettingsMessage('Saved.');
+      });
     });
   });
 
@@ -349,19 +294,6 @@ document.addEventListener('DOMContentLoaded', function () {
   }
   if (resetBtn) {
     resetBtn.addEventListener('click', resetSettings);
-  }
-
-  var geminiUrlInput = document.getElementById('geminiUrlInput');
-  var lambdaUrlInput = document.getElementById('lambdaUrlInput');
-  if (geminiUrlInput) {
-    geminiUrlInput.addEventListener('input', function () {
-      setSettingsMessage('Unsaved changes');
-    });
-  }
-  if (lambdaUrlInput) {
-    lambdaUrlInput.addEventListener('input', function () {
-      setSettingsMessage('Unsaved changes');
-    });
   }
 });
 
@@ -375,8 +307,5 @@ chrome.storage.onChanged.addListener(function (changes, area) {
     updateBackendLabel(changes.backendType.newValue);
   } else if (changes.backendProvider) {
     updateBackendLabel(changes.backendProvider.newValue === 'aws' ? 'lambda' : changes.backendProvider.newValue);
-  }
-  if (changes.lastAwsRequestDebug) {
-    renderAwsDebug(changes.lastAwsRequestDebug.newValue);
   }
 });
