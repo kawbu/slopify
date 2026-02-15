@@ -52,6 +52,29 @@
         </div>
     </div>
 
+    <div class="settings-panel hidden" id="settingsPanel">
+        <div class="settings-title">Backend Settings</div>
+        <label class="settings-label" for="providerSelect">Provider</label>
+        <select id="providerSelect" class="settings-input">
+            <option value="aws">AWS Lambda</option>
+            <option value="gemini">Gemini (FastAPI)</option>
+        </select>
+
+        <label class="settings-label" for="backendUrlInput">Backend URL</label>
+        <input
+            id="backendUrlInput"
+            class="settings-input"
+            type="url"
+            placeholder="https://..."
+        />
+
+        <div class="settings-actions">
+            <button id="saveSettingsButton" class="settings-button primary">Save</button>
+            <button id="resetSettingsButton" class="settings-button">Reset</button>
+        </div>
+        <div class="settings-status" id="settingsStatus"></div>
+    </div>
+
     <script src="../popup/popup.js"></script>
 </body>
 </html>

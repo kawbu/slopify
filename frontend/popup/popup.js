@@ -1,4 +1,10 @@
 const REUSE_RESULT_WINDOW_MS = 120000;
+const DEFAULT_AWS_BACKEND_URL = "https://q1zezp536f.execute-api.us-east-1.amazonaws.com";
+const DEFAULT_GEMINI_BACKEND_URL = "http://localhost:8000";
+
+function getDefaultUrl(provider) {
+    return provider === "gemini" ? DEFAULT_GEMINI_BACKEND_URL : DEFAULT_AWS_BACKEND_URL;
+}
 
 function parseConfidence(confidence) {
     const n = Number(confidence);
@@ -71,6 +77,85 @@ function extractDomain(url) {
 
 function setStatus(text) {
     document.getElementById("statusText").textContent = text;
+}
+
+function setSettingsStatus(text) {
+    const node = document.getElementById("settingsStatus");
+    if (node) {
+        node.textContent = text || "";
+    }
+}
+
+async function loadBackendSettings() {
+    const values = await chrome.storage.local.get([
+        "backendProvider",
+        "backendUrl",
+        "awsBackendUrl",
+        "geminiBackendUrl"
+    ]);
+
+    const provider = values.backendProvider === "gemini" ? "gemini" : "aws";
+    const awsUrl = (values.awsBackendUrl || values.backendUrl || DEFAULT_AWS_BACKEND_URL).trim();
+    const geminiUrl = (values.geminiBackendUrl || DEFAULT_GEMINI_BACKEND_URL).trim();
+
+    return {
+        provider,
+        awsUrl,
+        geminiUrl
+    };
+}
+
+function updateBackendUrlInput(provider, awsUrl, geminiUrl) {
+    const input = document.getElementById("backendUrlInput");
+    if (!input) {
+        return;
+    }
+    input.value = provider === "gemini" ? geminiUrl : awsUrl;
+}
+
+async function hydrateSettingsForm() {
+    const { provider, awsUrl, geminiUrl } = await loadBackendSettings();
+    const providerSelect = document.getElementById("providerSelect");
+    if (providerSelect) {
+        providerSelect.value = provider;
+    }
+    updateBackendUrlInput(provider, awsUrl, geminiUrl);
+}
+
+async function saveSettings() {
+    const providerSelect = document.getElementById("providerSelect");
+    const backendUrlInput = document.getElementById("backendUrlInput");
+    if (!providerSelect || !backendUrlInput) {
+        return;
+    }
+
+    const provider = providerSelect.value === "gemini" ? "gemini" : "aws";
+    const typed = backendUrlInput.value.trim();
+    const { awsUrl, geminiUrl } = await loadBackendSettings();
+
+    const nextAwsUrl = provider === "aws" ? (typed || DEFAULT_AWS_BACKEND_URL) : awsUrl;
+    const nextGeminiUrl = provider === "gemini" ? (typed || DEFAULT_GEMINI_BACKEND_URL) : geminiUrl;
+
+    await chrome.storage.local.set({
+        backendProvider: provider,
+        awsBackendUrl: nextAwsUrl,
+        geminiBackendUrl: nextGeminiUrl,
+        backendUrl: nextAwsUrl
+    });
+
+    updateBackendUrlInput(provider, nextAwsUrl, nextGeminiUrl);
+    setSettingsStatus("Saved.");
+}
+
+async function resetSettings() {
+    await chrome.storage.local.set({
+        backendProvider: "aws",
+        awsBackendUrl: DEFAULT_AWS_BACKEND_URL,
+        geminiBackendUrl: DEFAULT_GEMINI_BACKEND_URL,
+        backendUrl: DEFAULT_AWS_BACKEND_URL
+    });
+    await hydrateSettingsForm();
+    setSettingsStatus("Defaults restored.");
 }
 
 function normalizeResult(payload) {
@@ -159,6 +244,50 @@ async function renderFromStoredResult(domain) {
 document.addEventListener("DOMContentLoaded", async () => {
     setRiskScore(0, "example.com");
     setStatus("Waiting for Check Slopify...");
+
+    const settingsButton = document.getElementById("settingsButton");
+    const settingsPanel = document.getElementById("settingsPanel");
+    const providerSelect = document.getElementById("providerSelect");
+    const saveSettingsButton = document.getElementById("saveSettingsButton");
+    const resetSettingsButton = document.getElementById("resetSettingsButton");
+
+    if (settingsButton && settingsPanel) {
+        settingsButton.addEventListener("click", async () => {
+            settingsPanel.classList.toggle("hidden");
+            if (!settingsPanel.classList.contains("hidden")) {
+                await hydrateSettingsForm();
+            }
+            setSettingsStatus("");
+        });
+    }
+
+    if (providerSelect) {
+        providerSelect.addEventListener("change", async () => {
+            const { awsUrl, geminiUrl } = await loadBackendSettings();
+            updateBackendUrlInput(providerSelect.value, awsUrl, geminiUrl);
+            setSettingsStatus("");
+        });
+    }
+
+    if (saveSettingsButton) {
+        saveSettingsButton.addEventListener("click", async () => {
+            try {
+                await saveSettings();
+            } catch (error) {
+                setSettingsStatus(`Save failed: ${error?.message || "Unknown error"}`);
+            }
+        });
+    }
+
+    if (resetSettingsButton) {
+        resetSettingsButton.addEventListener("click", async () => {
+            try {
+                await resetSettings();
+            } catch (error) {
+                setSettingsStatus(`Reset failed: ${error?.message || "Unknown error"}`);
+            }
+        });
+    }
 
     try {
         const tab = await getActiveTab();

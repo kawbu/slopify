@@ -1,4 +1,5 @@
-const DEFAULT_BACKEND_URL = "https://q1zezp536f.execute-api.us-east-1.amazonaws.com";
+const DEFAULT_AWS_BACKEND_URL = "https://q1zezp536f.execute-api.us-east-1.amazonaws.com";
+const DEFAULT_GEMINI_BACKEND_URL = "http://localhost:8000";
 const MAX_SNIPPET_CHARS = 1800;
 const DEDUPE_WINDOW_MS = 15000;
 
@@ -10,13 +11,27 @@ function normalizeSnippet(text) {
     return cleaned.slice(0, MAX_SNIPPET_CHARS);
 }
 
-function dedupeKey(snippet, url) {
-    return `${String(url || "")}|${snippet}`;
+function dedupeKey(snippet, url, provider) {
+    return `${provider}|${String(url || "")}|${snippet}`;
 }
 
-async function getBackendUrl() {
-    const { backendUrl } = await chrome.storage.local.get("backendUrl");
-    return backendUrl || DEFAULT_BACKEND_URL;
+async function getBackendConfig() {
+    const values = await chrome.storage.local.get([
+        "backendProvider",
+        "backendUrl",
+        "awsBackendUrl",
+        "geminiBackendUrl"
+    ]);
+
+    const provider = values.backendProvider === "gemini" ? "gemini" : "aws";
+    const awsUrl = values.awsBackendUrl || values.backendUrl || DEFAULT_AWS_BACKEND_URL;
+    const geminiUrl = values.geminiBackendUrl || DEFAULT_GEMINI_BACKEND_URL;
+    const backendUrl = provider === "gemini" ? geminiUrl : awsUrl;
+
+    return {
+        provider,
+        backendUrl
+    };
 }
 
 async function openPopupSafely() {
@@ -48,7 +63,9 @@ async function analyzeSelection(selectedText, tab) {
         throw new Error("No text selected. Highlight text first.");
     }
 
-    const key = dedupeKey(snippet, tab?.url || "");
+    const { provider, backendUrl } = await getBackendConfig();
+
+    const key = dedupeKey(snippet, tab?.url || "", provider);
     const { lastRequestKey, lastRequestAt, lastAnalysis } = await chrome.storage.local.get([
         "lastRequestKey",
         "lastRequestAt",
@@ -59,21 +76,28 @@ async function analyzeSelection(selectedText, tab) {
         return lastAnalysis;
     }
 
-    const backendUrl = await getBackendUrl();
+    const body =
+        provider === "gemini"
+            ? {
+                  text: snippet,
+                  url: tab?.url || null
+              }
+            : {
+                  snippet,
+                  source: "chrome-extension",
+                  url: tab?.url || null,
+                  user_context: {
+                      trigger: "context-menu",
+                      browserLocale: chrome.i18n.getUILanguage()
+                  }
+              };
+
     const response = await fetch(`${backendUrl}/verify`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-            snippet,
-            source: "chrome-extension",
-            url: tab?.url || null,
-            user_context: {
-                trigger: "context-menu",
-                browserLocale: chrome.i18n.getUILanguage()
-            }
-        })
+        body: JSON.stringify(body)
     });
 
     const payload = await response.json().catch(() => ({}));
@@ -83,7 +107,8 @@ async function analyzeSelection(selectedText, tab) {
 
     await chrome.storage.local.set({
         lastRequestKey: key,
-        lastRequestAt: Date.now()
+        lastRequestAt: Date.now(),
+        lastBackendProvider: provider
     });
 
     return payload;
