@@ -1,6 +1,6 @@
 {
     "name": "Slopify",
-    "version": "2.0",
+    "version": "1.0",
     "description": "Fact-check highlighted text on any webpage",
     "manifest_version": 3,
     "permissions": [
@@ -13,11 +13,11 @@
         "service_worker": "background.js"
     },
     "action": {
-        "default_popup": "frontend/popup.html",
-        "default_icon": "public/logo.png"
+        "default_popup": "frontend/popup/popup.html",
+        "default_icon": "public/Slopify.png"
     },
     "icons": {
-        "48": "public/logo.png",
-        "128": "public/logo.png"
+        "48": "public/Slopify.png",
+        "128": "public/Slopify.png"
     }
 }

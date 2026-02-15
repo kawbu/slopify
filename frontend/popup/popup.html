@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slopify</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="header">
+        <div class="logo-section">
+            <img src="../../public/Slopify.png" alt="Slopify" class="logo">
+            <div class="logo-text">Slopify</div>
+        </div>
+        <div class="settings-icon">&#9881;</div>
+    </div>
+
+    <!-- Score card section -->
+    <div class="container" id="scoreCard">
+        <div class="circle-container">
+            <svg class="progress-circle" viewBox="0 0 200 200">
+                <circle class="circle-background" cx="100" cy="100" r="90"></circle>
+                <circle class="circle-progress" id="progressCircle" cx="100" cy="100" r="90"></circle>
+            </svg>
+            <div class="circle-text">
+                <div class="score-number" id="scoreNumber">0</div>
+                <div class="score-label">Risk</div>
+            </div>
+        </div>
+        <div class="domain" id="domainText">No analysis yet</div>
+    </div>
+
+    <!-- Loading spinner (hidden by default) -->
+    <div class="loading-section" id="loadingSection" style="display:none;">
+        <div class="spinner"></div>
+        <div class="loading-text">Fact-checking...</div>
+        <div class="selected-preview" id="loadingPreview"></div>
+    </div>
+
+    <!-- Error section (hidden by default) -->
+    <div class="error-section" id="errorSection" style="display:none;">
+        <div class="error-icon">!</div>
+        <div class="error-message" id="errorMessage"></div>
+    </div>
+
+    <!-- Summary section (hidden by default) -->
+    <div class="summary" id="summarySection" style="display:none;"></div>
+
+    <!-- Claims section (hidden by default) -->
+    <div id="claimsSection" style="display:none;">
+        <div class="section-title">Claims Analysis</div>
+        <div id="claimsList"></div>
+    </div>
+
+    <!-- Red flags section (hidden by default) -->
+    <div id="flagsSection" style="display:none;">
+        <div class="section-title">Red Flags</div>
+        <div id="flagsList"></div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>

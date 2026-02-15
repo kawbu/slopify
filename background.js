@@ -1,4 +1,4 @@
-// background.js — Service worker: context menu, backend API, overlay injection
+// background.js — Service worker: context menu, backend API, storage
 
 const DEFAULT_BACKEND_URL = "http://localhost:8000";
 const MAX_SELECTION_LENGTH = 5000;
@@ -53,39 +53,55 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     selectedText = selectedText.substring(0, MAX_SELECTION_LENGTH);
   }
 
+  const domain = tab.url ? new URL(tab.url).hostname : "unknown";
+
   try {
-    // Inject overlay content script
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ["content/overlay.js"],
+    // Store loading state so the popup can show a spinner
+    await chrome.storage.local.set({
+      slopifyState: {
+        status: "loading",
+        text: selectedText,
+        domain: domain,
+        timestamp: Date.now(),
+      },
     });
 
-    // Send loading state
-    await chrome.tabs.sendMessage(tab.id, {
-      action: "slopify-loading",
-      text: selectedText,
-    });
+    // Open the extension popup
+    try {
+      await chrome.action.openPopup();
+    } catch (e) {
+      // openPopup may not be supported in all Chrome versions
+      console.warn("[Slopify] Could not auto-open popup:", e);
+    }
 
     // Call backend API
     const result = await factCheckWithBackend(selectedText, tab.url);
 
-    // Send results to overlay
-    await chrome.tabs.sendMessage(tab.id, {
-      action: "slopify-result",
-      data: result,
-      originalText: selectedText,
+    // Store results so the popup can read them
+    await chrome.storage.local.set({
+      lastResult: {
+        data: result,
+        domain: domain,
+        timestamp: Date.now(),
+      },
+      slopifyState: {
+        status: "result",
+        data: result,
+        domain: domain,
+        originalText: selectedText,
+        timestamp: Date.now(),
+      },
     });
   } catch (err) {
     console.error("[Slopify] Error:", err);
-    try {
-      await chrome.tabs.sendMessage(tab.id, {
-        action: "slopify-error",
+    await chrome.storage.local.set({
+      slopifyState: {
+        status: "error",
         message: err.message,
-      });
-    } catch (e) {
-      // Content script may not be ready
-      console.error("[Slopify] Could not send error to tab:", e);
-    }
+        domain: domain,
+        timestamp: Date.now(),
+      },
+    });
   }
 });
 
