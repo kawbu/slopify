@@ -1,7 +1,13 @@
 const DEFAULT_AWS_BACKEND_URL = "https://q1zezp536f.execute-api.us-east-1.amazonaws.com";
 const DEFAULT_GEMINI_BACKEND_URL = "http://localhost:8000";
+const ALT_GEMINI_BACKEND_URL = "http://localhost:8787";
 const MAX_SNIPPET_CHARS = 1800;
 const DEDUPE_WINDOW_MS = 15000;
+
+function normalizeBaseUrl(url, fallback) {
+    const value = String(url || fallback || "").trim();
+    return value.endsWith("/") ? value.slice(0, -1) : value;
+}
 
 function normalizeSnippet(text) {
     const cleaned = String(text || "").replace(/\s+/g, " ").trim();
@@ -24,8 +30,8 @@ async function getBackendConfig() {
     ]);
 
     const provider = values.backendProvider === "gemini" ? "gemini" : "aws";
-    const awsUrl = values.awsBackendUrl || values.backendUrl || DEFAULT_AWS_BACKEND_URL;
-    const geminiUrl = values.geminiBackendUrl || DEFAULT_GEMINI_BACKEND_URL;
+    const awsUrl = normalizeBaseUrl(values.awsBackendUrl || values.backendUrl, DEFAULT_AWS_BACKEND_URL);
+    const geminiUrl = normalizeBaseUrl(values.geminiBackendUrl, DEFAULT_GEMINI_BACKEND_URL);
     const backendUrl = provider === "gemini" ? geminiUrl : awsUrl;
 
     return {
@@ -92,17 +98,50 @@ async function analyzeSelection(selectedText, tab) {
                   }
               };
 
-    const response = await fetch(`${backendUrl}/verify`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify(body)
-    });
+    const candidateUrls =
+        provider === "gemini"
+            ? [backendUrl, backendUrl === DEFAULT_GEMINI_BACKEND_URL ? ALT_GEMINI_BACKEND_URL : DEFAULT_GEMINI_BACKEND_URL]
+            : [backendUrl];
 
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-        throw new Error(payload?.error || `Request failed: HTTP ${response.status}`);
+    let lastError = null;
+    let payload = null;
+    let activeResponse = null;
+
+    for (const baseUrl of candidateUrls) {
+        const target = normalizeBaseUrl(baseUrl, backendUrl);
+        if (!target) {
+            continue;
+        }
+
+        try {
+            const response = await fetch(`${target}/verify`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(body)
+            });
+
+            const parsed = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                const detail = parsed?.detail || parsed?.error || parsed?.message;
+                lastError = new Error(detail || `Request failed: HTTP ${response.status}`);
+                continue;
+            }
+
+            payload = parsed;
+            activeResponse = response;
+            if (provider === "gemini" && target !== backendUrl) {
+                await chrome.storage.local.set({ geminiBackendUrl: target });
+            }
+            break;
+        } catch (error) {
+            lastError = error;
+        }
+    }
+
+    if (!activeResponse) {
+        throw new Error(lastError?.message || "Gemini backend is unreachable.");
     }
 
     await chrome.storage.local.set({

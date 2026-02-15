@@ -253,11 +253,23 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (settingsButton && settingsPanel) {
         settingsButton.addEventListener("click", async () => {
-            settingsPanel.classList.toggle("hidden");
-            if (!settingsPanel.classList.contains("hidden")) {
-                await hydrateSettingsForm();
+            try {
+                if (chrome.runtime?.openOptionsPage) {
+                    await chrome.runtime.openOptionsPage();
+                }
+            } catch {
+                // Keep inline panel fallback below.
             }
-            setSettingsStatus("");
+
+            try {
+                settingsPanel.classList.toggle("hidden");
+                if (!settingsPanel.classList.contains("hidden")) {
+                    await hydrateSettingsForm();
+                }
+                setSettingsStatus("");
+            } catch (error) {
+                setSettingsStatus(`Failed to open settings: ${error?.message || "Unknown error"}`);
+            }
         });
     }
 

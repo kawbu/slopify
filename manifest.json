@@ -7,6 +7,7 @@
         "default_popup": "frontend/popup/popup.html",
         "default_icon": "public/Slopify.png"
     },
+    "options_page": "frontend/options/options.html",
     "permissions": [
         "contextMenus",
         "activeTab",

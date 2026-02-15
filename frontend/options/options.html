@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slopify Options</title>
+    <link rel="stylesheet" href="./options.css">
+</head>
+<body>
+    <main class="panel">
+        <h1>Slopify Options</h1>
+        <p class="subtitle">Choose which backend is used when you click Check Slopify.</p>
+
+        <label for="providerSelect">Backend Provider</label>
+        <select id="providerSelect">
+            <option value="aws">AWS Lambda</option>
+            <option value="gemini">Gemini (Local FastAPI)</option>
+        </select>
+
+        <label for="awsUrlInput">AWS URL</label>
+        <input id="awsUrlInput" type="url" placeholder="https://..." />
+
+        <label for="geminiUrlInput">Gemini URL</label>
+        <input id="geminiUrlInput" type="url" placeholder="http://localhost:8000" />
+
+        <div class="actions">
+            <button id="saveBtn" class="primary">Save</button>
+            <button id="resetBtn">Reset Defaults</button>
+        </div>
+
+        <p id="status"></p>
+    </main>
+
+    <script src="./options.js"></script>
+</body>
+</html>

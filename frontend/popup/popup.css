@@ -50,8 +50,7 @@ body {
 }
 
 .settings-icon {
-    width: 24px;
-    height: 24px;
+    min-height: 24px;
     border: none;
     background: transparent;
     padding: 0;
@@ -59,6 +58,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 6px;
 }
 
 .settings-icon-svg {
@@ -81,6 +81,17 @@ body {
 .settings-icon:focus-visible .settings-icon-svg {
     transform: rotate(25deg);
     background-color: #0066cc;
+}
+
+.settings-button-text {
+    font-size: 12px;
+    font-weight: 700;
+    color: #334155;
+}
+
+.settings-icon:hover .settings-button-text,
+.settings-icon:focus-visible .settings-button-text {
+    color: #0066cc;
 }
 
 .container {
