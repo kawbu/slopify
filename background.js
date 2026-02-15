@@ -184,6 +184,10 @@ async function factCheckWithBackend(text, url) {
     if (!target) continue;
 
     try {
+      if (config.type === "lambda") {
+        console.log("[Slopify][AWS] Request URL:", target);
+      }
+
       const res = await fetch(target, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -206,6 +210,12 @@ async function factCheckWithBackend(text, url) {
           ok: res.ok,
           bodyPreview: String(rawText || "").slice(0, 800),
           at: Date.now(),
+        });
+        console.log("[Slopify][AWS] Response:", {
+          url: target,
+          status: res.status,
+          ok: res.ok,
+          bodyPreview: String(rawText || "").slice(0, 800),
         });
       }
 
@@ -233,15 +243,7 @@ async function factCheckWithBackend(text, url) {
           await chrome.storage.local.set({ geminiBackendUrl: healthyBase });
         }
       } else {
-        await chrome.storage.local.set({
-          lastAwsRequestDebug: {
-            status: "ok",
-            requestUrl: target,
-            attempts: attemptLogs,
-            responsePreview: JSON.stringify(parsed).slice(0, 1200),
-            at: Date.now(),
-          },
-        });
+        console.log("[Slopify][AWS] Parsed success payload:", parsed);
       }
       break;
     } catch (error) {
@@ -255,20 +257,19 @@ async function factCheckWithBackend(text, url) {
           error: error?.message || "Request failed",
           at: Date.now(),
         });
+        console.error("[Slopify][AWS] Request failed:", {
+          url: target,
+          error: error?.message || "Request failed",
+        });
       }
     }
   }
 
   if (!response) {
     if (config.type === "lambda") {
-      await chrome.storage.local.set({
-        lastAwsRequestDebug: {
-          status: "error",
-          requestUrl: null,
-          attempts: attemptLogs,
-          error: lastError?.message || "Failed to contact backend.",
-          at: Date.now(),
-        },
+      console.error("[Slopify][AWS] All attempts failed:", {
+        attempts: attemptLogs,
+        error: lastError?.message || "Failed to contact backend.",
       });
     }
     throw new Error(lastError?.message || "Failed to contact backend.");
@@ -301,24 +302,37 @@ function normalizeLambdaResponse(result) {
     ? Math.max(0, Math.min(100, Math.round(scoreRaw)))
     : null;
 
+  const normalizedClaims = Array.isArray(result.claims)
+    ? result.claims.map((c) => ({
+        claim: typeof c === "string" ? c : c.claim || "",
+        assessment: typeof c === "string"
+          ? (labelToVerdict[result.label] || "Unverifiable")
+          : (c.assessment || labelToVerdict[result.label] || "Unverifiable"),
+        explanation: typeof c === "string"
+          ? (result.reasoning || result.explanation || "")
+          : (c.explanation || result.reasoning || result.explanation || ""),
+      }))
+    : [];
+
+  const explicitRedFlags = Array.isArray(result.red_flags)
+    ? result.red_flags.map((f) => String(f || "").trim()).filter(Boolean)
+    : [];
+
+  const derivedRedFlags = normalizedClaims
+    .filter((c) => c.assessment && c.assessment !== "Accurate")
+    .map((c) => (c.explanation || c.claim || "").trim())
+    .filter(Boolean);
+
+  const redFlags = Array.from(new Set(explicitRedFlags.length ? explicitRedFlags : derivedRedFlags)).slice(0, 6);
+
   return {
     verdict: labelToVerdict[result.label] || "Unverifiable",
     label: result.label || "Unclear",
     confidence,
     score,
     raw_score: score,
-    claims: Array.isArray(result.claims)
-      ? result.claims.map((c) => ({
-          claim: typeof c === "string" ? c : c.claim || "",
-          assessment: typeof c === "string"
-            ? (labelToVerdict[result.label] || "Unverifiable")
-            : (c.assessment || labelToVerdict[result.label] || "Unverifiable"),
-          explanation: typeof c === "string"
-            ? (result.reasoning || result.explanation || "")
-            : (c.explanation || result.reasoning || result.explanation || ""),
-        }))
-      : [],
-    red_flags: [],
+    claims: normalizedClaims,
+    red_flags: redFlags,
     summary: result.summary || result.reasoning || result.explanation || "No summary available.",
     reasoning: result.reasoning || result.explanation || "",
     citations: Array.isArray(result.citations) ? result.citations : [],
