@@ -36,7 +36,7 @@
         display: flex;
         gap: 8px;
       }
-      input[type="password"] {
+      input[type="text"] {
         flex: 1;
         padding: 8px 10px;
         background: #16213e;
@@ -46,7 +46,7 @@
         font-size: 13px;
         outline: none;
       }
-      input[type="password"]:focus {
+      input[type="text"]:focus {
         border-color: #4285f4;
       }
       .save-btn {
@@ -62,13 +62,13 @@
       .save-btn:hover {
         background: #3367d6;
       }
-      #key-status {
+      #url-status {
         font-size: 11px;
         margin-top: 6px;
         min-height: 16px;
       }
       .status-saved { color: #4ade80; }
-      .status-missing { color: #fca5a5; }
+      .status-default { color: #9ca3af; }
       .how-to {
         padding: 12px;
         background: #16213e;
@@ -90,20 +90,21 @@
     <div class="subtitle">AI-powered fact-checking</div>
 
     <div class="section">
-      <div class="section-title">API Key</div>
+      <div class="section-title">Backend URL</div>
       <div class="input-row">
-        <input type="password" id="api-key-input" placeholder="sk-ant-..." />
+        <input type="text" id="backend-url-input" placeholder="http://localhost:8000" />
         <button class="save-btn" id="save-btn">Save</button>
       </div>
-      <div id="key-status"></div>
+      <div id="url-status"></div>
     </div>
 
     <div class="section">
       <div class="section-title">How to use</div>
       <div class="how-to">
-        <div class="step"><strong>1.</strong> Highlight any text on a webpage</div>
-        <div class="step"><strong>2.</strong> Right-click the selection</div>
-        <div class="step"><strong>3.</strong> Click <strong>"Fact-check with Slopify"</strong></div>
+        <div class="step"><strong>1.</strong> Start the backend: <strong>cd backend && uvicorn app.main:app --reload</strong></div>
+        <div class="step"><strong>2.</strong> Highlight any text on a webpage</div>
+        <div class="step"><strong>3.</strong> Right-click the selection</div>
+        <div class="step"><strong>4.</strong> Click <strong>"Fact-check with Slopify"</strong></div>
         <div class="step">Results appear in a floating panel on the page.</div>
       </div>
     </div>

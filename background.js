@@ -1,31 +1,12 @@
-// background.js — Service worker: context menu, Claude API, overlay injection
+// background.js — Service worker: context menu, backend API, overlay injection
 
-const SYSTEM_PROMPT = `You are a fact-checking assistant. Analyze the provided text passage for factual accuracy.
-
-Return your analysis as a JSON object with this exact structure:
-{
-  "verdict": "Accurate" or "Mostly Accurate" or "Mixed" or "Mostly Inaccurate" or "Inaccurate" or "Unverifiable",
-  "confidence": 0-100,
-  "claims": [
-    {
-      "claim": "The specific claim extracted from the text",
-      "assessment": "Accurate" or "Inaccurate" or "Misleading" or "Unverifiable" or "Lacks Context",
-      "explanation": "Brief explanation of why this claim is rated this way"
-    }
-  ],
-  "red_flags": ["Any concerning patterns: emotional manipulation, logical fallacies, missing context, etc."],
-  "summary": "A 2-3 sentence overall assessment of the passage's factual reliability"
-}
-
-Guidelines:
-- Extract and evaluate each distinct factual claim in the passage.
-- For well-known facts, state whether they are accurate.
-- For claims you cannot verify, mark them as "Unverifiable" rather than guessing.
-- Be specific in explanations. Reference what you know to be true when correcting claims.
-- If the text is opinion rather than factual claims, note this in the summary.
-- Do not add any text outside the JSON object. Return only valid JSON.`;
-
+const DEFAULT_BACKEND_URL = "http://localhost:8000";
 const MAX_SELECTION_LENGTH = 5000;
+
+async function getBackendUrl() {
+  const { backendUrl } = await chrome.storage.local.get("backendUrl");
+  return backendUrl || DEFAULT_BACKEND_URL;
+}
 
 // Register context menu on install
 chrome.runtime.onInstalled.addListener(() => {
@@ -68,10 +49,8 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (!selectedText.trim()) return;
 
   // Truncate if too long
-  let truncated = false;
   if (selectedText.length > MAX_SELECTION_LENGTH) {
     selectedText = selectedText.substring(0, MAX_SELECTION_LENGTH);
-    truncated = true;
   }
 
   try {
@@ -87,8 +66,8 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       text: selectedText,
     });
 
-    // Call Claude API
-    const result = await factCheckWithClaude(selectedText, truncated);
+    // Call backend API
+    const result = await factCheckWithBackend(selectedText, tab.url);
 
     // Send results to overlay
     await chrome.tabs.sendMessage(tab.id, {
@@ -110,52 +89,23 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 });
 
-async function factCheckWithClaude(text, truncated) {
-  const { apiKey } = await chrome.storage.local.get("apiKey");
-  if (!apiKey) {
-    throw new Error(
-      "API key not set. Click the Slopify icon to add your Claude API key."
-    );
-  }
-
-  let userMessage = `Fact-check the following passage:\n\n"${text}"`;
-  if (truncated) {
-    userMessage += `\n\n[Note: The selected text was truncated to ${MAX_SELECTION_LENGTH} characters.]`;
-  }
-
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+async function factCheckWithBackend(text, url) {
+  const backendUrl = await getBackendUrl();
+  const response = await fetch(`${backendUrl}/verify`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
     },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1024,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userMessage }],
-    }),
+    body: JSON.stringify({ text, url }),
   });
 
   if (!response.ok) {
     const errorBody = await response.text();
-    if (response.status === 401) {
-      throw new Error("Invalid API key. Check your key in the Slopify popup.");
+    if (response.status === 502) {
+      throw new Error("Backend could not parse AI response. Please try again.");
     }
-    if (response.status === 429) {
-      throw new Error("Rate limited. Please wait a moment and try again.");
-    }
-    throw new Error(`Claude API error (${response.status}): ${errorBody}`);
+    throw new Error(`Backend error (${response.status}): ${errorBody}`);
   }
 
-  const data = await response.json();
-  const content = data.content[0].text;
-
-  try {
-    return JSON.parse(content);
-  } catch (e) {
-    throw new Error("Failed to parse Claude's response as JSON.");
-  }
+  return response.json();
 }
