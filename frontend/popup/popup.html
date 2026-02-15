@@ -20,6 +20,25 @@
         </button>
     </div>
 
+    <!-- Settings panel (hidden by default) -->
+    <div class="settings-panel" id="settingsPanel" style="display:none;">
+        <div class="settings-title">Backend Provider</div>
+        <label class="backend-option" id="optionGemini">
+            <input type="radio" name="backendType" value="gemini" checked>
+            <div class="backend-option-content">
+                <div class="backend-option-name">Gemini (Local)</div>
+                <div class="backend-option-desc">FastAPI + Google Gemini. Requires local server.</div>
+            </div>
+        </label>
+        <label class="backend-option" id="optionLambda">
+            <input type="radio" name="backendType" value="lambda">
+            <div class="backend-option-content">
+                <div class="backend-option-name">AWS Lambda (Cloud)</div>
+                <div class="backend-option-desc">AWS Lambda + Bedrock. No local server needed.</div>
+            </div>
+        </label>
+    </div>
+
     <!-- Score card section -->
     <div class="container" id="scoreCard">
         <div class="circle-container">

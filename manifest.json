@@ -20,11 +20,7 @@
         "default_popup": "frontend/popup/popup.html",
         "default_icon": "public/Slopify.png"
     },
-    "options_ui": {
-        "page": "frontend/options/options.html",
-        "open_in_tab": false
-    },
-    "icons": {
+"icons": {
         "48": "public/Slopify.png",
         "128": "public/Slopify.png"
     }

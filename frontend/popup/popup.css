@@ -55,6 +55,72 @@ body {
     font-weight: 500;
 }
 
+/* Inline settings panel */
+.settings-panel {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    margin-bottom: 14px;
+}
+
+.settings-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6b7280;
+    margin-bottom: 12px;
+}
+
+.backend-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px;
+    border: 2px solid #e5e7eb;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: border-color 180ms ease, background 180ms ease;
+    margin-bottom: 8px;
+}
+
+.backend-option:last-of-type {
+    margin-bottom: 0;
+}
+
+.backend-option:hover {
+    border-color: #93c5fd;
+    background: #f0f7ff;
+}
+
+.backend-option.selected {
+    border-color: #0066cc;
+    background: #eff6ff;
+}
+
+.backend-option input[type="radio"] {
+    margin-top: 2px;
+    accent-color: #0066cc;
+}
+
+.backend-option-content {
+    flex: 1;
+}
+
+.backend-option-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 2px;
+}
+
+.backend-option-desc {
+    font-size: 11px;
+    color: #6b7280;
+    line-height: 1.4;
+}
+
 .settings-icon {
     width: 24px;
     height: 24px;

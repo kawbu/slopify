@@ -172,10 +172,25 @@ function updateBackendLabel(type) {
   document.getElementById('backendLabel').textContent = BACKEND_LABELS[type] || BACKEND_LABELS.gemini;
 }
 
+function updateSelectedStyles() {
+  document.querySelectorAll('.backend-option').forEach(function (el) {
+    var radio = el.querySelector('input[type="radio"]');
+    el.classList.toggle('selected', radio.checked);
+  });
+}
+
 // On popup open: read current state
 document.addEventListener('DOMContentLoaded', function () {
+  var settingsPanel = document.getElementById('settingsPanel');
+
   chrome.storage.local.get(['slopifyState', 'lastResult', 'backendType'], function (result) {
-    updateBackendLabel(result.backendType);
+    var type = result.backendType || 'gemini';
+    updateBackendLabel(type);
+
+    // Set the correct radio button
+    var radios = document.querySelectorAll('input[name="backendType"]');
+    radios.forEach(function (r) { r.checked = r.value === type; });
+    updateSelectedStyles();
 
     var state = result.slopifyState;
     if (state) {
@@ -187,9 +202,20 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
-  // Settings button opens the options page
+  // Toggle settings panel
   document.getElementById('settingsButton').addEventListener('click', function () {
-    chrome.runtime.openOptionsPage();
+    var visible = settingsPanel.style.display !== 'none';
+    settingsPanel.style.display = visible ? 'none' : 'block';
+  });
+
+  // Save immediately when a radio is clicked
+  document.querySelectorAll('input[name="backendType"]').forEach(function (radio) {
+    radio.addEventListener('change', function () {
+      var selected = this.value;
+      chrome.storage.local.set({ backendType: selected });
+      updateBackendLabel(selected);
+      updateSelectedStyles();
+    });
   });
 });
 
