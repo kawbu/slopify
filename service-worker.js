@@ -19,6 +19,29 @@ async function getBackendUrl() {
     return backendUrl || DEFAULT_BACKEND_URL;
 }
 
+async function openPopupSafely() {
+    try {
+        if (chrome.action?.openPopup) {
+            await chrome.action.openPopup();
+            return;
+        }
+    } catch {
+        // Fallback below.
+    }
+
+    try {
+        await chrome.windows.create({
+            url: chrome.runtime.getURL("frontend/popup/popup.html"),
+            type: "popup",
+            width: 440,
+            height: 900,
+            focused: true
+        });
+    } catch {
+        // Ignore if popup window cannot be created.
+    }
+}
+
 async function analyzeSelection(selectedText, tab) {
     const snippet = normalizeSnippet(selectedText);
     if (!snippet) {
@@ -69,7 +92,7 @@ async function analyzeSelection(selectedText, tab) {
 chrome.runtime.onInstalled.addListener(() => {
     chrome.contextMenus.create({
         id: "analyzeText",
-        title: "Analyze with Slopify",
+        title: "Check Slopify",
         contexts: ["selection"]
     });
 });
@@ -78,6 +101,9 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     if (info.menuItemId !== "analyzeText") {
         return;
     }
+
+    // Open popup while still in direct click handling context.
+    await openPopupSafely();
 
     const selectedText = normalizeSnippet(info.selectionText || "");
     if (!selectedText) {

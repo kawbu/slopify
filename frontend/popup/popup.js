@@ -58,15 +58,17 @@ function setRiskScore(score, domain = "example.com") {
     circle.style.strokeDasharray = circumference;
     circle.style.strokeDashoffset = offset;
 
+    let scoreColor = "#22c55e";
     if (score >= 75) {
-        circle.style.stroke = "#ef4444";
+        scoreColor = "#ef4444";
     } else if (score >= 50) {
-        circle.style.stroke = "#f97316";
+        scoreColor = "#f97316";
     } else if (score >= 25) {
-        circle.style.stroke = "#eab308";
-    } else {
-        circle.style.stroke = "#22c55e";
+        scoreColor = "#eab308";
     }
+
+    circle.style.stroke = scoreColor;
+    document.getElementById("scoreNumber").style.color = scoreColor;
 }
 
 function extractDomain(url) {
